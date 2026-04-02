@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
       - name: sandbox-container
-        image: opensandbox/code-interpreter:v1.0.2
+        image: codeintepreter:1.0.0
         ports:
         - containerPort: 44772   # execd port
         - containerPort: 54321   # Jupyter port

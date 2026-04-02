@@ -90,12 +90,12 @@ kindCluster:
 
 # OpenSandbox Resource Pool component values
 opensandboxResourcePool:
-  enabled: false
+  enabled: true
   namespace: opensandbox-system
   pool:
     name: my-sandbox-pool
     container:
-      image: opensandbox/code-interpreter:v1.0.2
+      image: codeintepreter:1.0.0
       ports:
         - containerPort: 44772
         - containerPort: 54321
