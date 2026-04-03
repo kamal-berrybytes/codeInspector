@@ -39,6 +39,23 @@ and cannot be supplied by users.
 
 ## Quick Start
 
+### Easiest Way (Docker Compose)
+
+The easiest and fastest way to provision the server locally is using the provided `Makefile` which wraps Docker Compose:
+
+```bash
+# Start the server and dependencies in the background
+make up
+
+# View the logs
+make logs
+
+# Stop the server
+make down
+```
+
+The server will be available at `http://localhost:8090`.
+
 ### Installation
 
 Install from PyPI. For local development, clone the repo and run `uv sync` in `server/`.
