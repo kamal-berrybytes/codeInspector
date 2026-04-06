@@ -68,6 +68,39 @@ class StatusResponse(BaseModel):
     healthy: bool
 
 
+# --- OpenSandbox Specific Models ---
+
+class ImageSpec(BaseModel):
+    """Container image specification."""
+    uri: Optional[str] = None
+    repository: Optional[str] = None
+    tag: Optional[str] = "latest"
+
+
+class ResourceLimits(BaseModel):
+    """Hardware resource constraints."""
+    cpu: str = "500m"
+    memory: str = "512Mi"
+
+
+class CreateSandboxRequest(BaseModel):
+    """Request payload to provision a new isolated sandbox."""
+    image: ImageSpec
+    entrypoint: list[str]
+    timeout: int = Field(60, ge=1, le=3600)
+    env: dict[str, str] = {}
+    resourceLimits: ResourceLimits = Field(default_factory=ResourceLimits)
+    metadata: dict[str, str] = {}
+
+
+class SandboxResponse(BaseModel):
+    """Standardized metadata representing a provisioned sandbox instance."""
+    id: str
+    status: str
+    image: ImageSpec
+    metadata: dict[str, str] = {}
+
+
 # ─────────────────────────────────────────────
 # 2. OpenSandbox Config Settings (Kubernetes Native)
 # ─────────────────────────────────────────────
@@ -110,6 +143,14 @@ class SandboxBackend(abc.ABC):
 
     @abc.abstractmethod
     def health_check(self) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def create_sandbox(self, req: CreateSandboxRequest) -> SandboxResponse:
+        pass
+
+    @abc.abstractmethod
+    def list_sandboxes(self) -> list[SandboxResponse]:
         pass
 
     @property
@@ -181,6 +222,28 @@ class GenericHTTPBackend(SandboxBackend):
                 return r.status_code < 500
         except Exception:
             return False
+
+    def create_sandbox(self, req: CreateSandboxRequest) -> SandboxResponse:
+        """Directly provisions a sandbox on the remote OpenSandbox server."""
+        with httpx.Client(timeout=30) as client:
+            r = client.post(
+                f"{self._url}/v1/sandboxes",
+                json=req.dict(exclude_none=True),
+                headers=opensandbox_headers()
+            )
+            r.raise_for_status()
+            data = r.json()
+            return SandboxResponse(**data)
+
+    def list_sandboxes(self) -> list[SandboxResponse]:
+        """Retrieves active sandboxes from the remote OpenSandbox server."""
+        with httpx.Client(timeout=10) as client:
+            r = client.get(f"{self._url}/v1/sandboxes", headers=opensandbox_headers())
+            r.raise_for_status()
+            data = r.json()
+            # Handle possible pagination or list wrapper if present in future
+            items = data if isinstance(data, list) else data.get("items", [])
+            return [SandboxResponse(**item) for item in items]
 
 
 class AppState:
@@ -342,6 +405,27 @@ async def proxy_delete(proxy_path: str, request: Request):
 @app.patch("/backend/opensandbox/{proxy_path:path}", tags=["Proxy Backend"], summary="Proxy PATCH request")
 async def proxy_patch(proxy_path: str, request: Request):
     return await _do_proxy(proxy_path, request)
+
+
+# ─────────────────────────────────────────────
+# 8. Native Sandbox Management (V1)
+# ─────────────────────────────────────────────
+
+@app.post("/v1/sandboxes", response_model=SandboxResponse, tags=["Sandboxes"], summary="Provision a new isolated sandbox")
+def create_sandbox(req: CreateSandboxRequest):
+    """
+    Creates a new sandbox environment using the active backend.
+    This provides a first-class, typed interface for sandbox lifecycle management.
+    """
+    return state.backend.create_sandbox(req)
+
+
+@app.get("/v1/sandboxes", response_model=list[SandboxResponse], tags=["Sandboxes"], summary="List all active sandboxes")
+def list_sandboxes():
+    """
+    Retrieves a list of all currently active sandboxes from the backend.
+    """
+    return state.backend.list_sandboxes()
 
 
 if __name__ == "__main__":
