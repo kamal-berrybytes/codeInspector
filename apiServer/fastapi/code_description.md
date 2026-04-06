@@ -1,55 +1,59 @@
-# CodeInspector API (`codeinspectior_api.py`) Functionality Breakdown
+# CodeInspector API - Modular Architecture Description
 
-This document provides a detailed, line-by-line explanation of the functionalities present in `codeinspectior_api.py`. It is designed to act as a robust API Gateway for the OpenSandbox environment, intelligently proxying traffic instead of hardcoding execution endpoints.
+This document provides a detailed overview of the modularized FastAPI architecture used in the CodeInspector API. The system is designed to be a transparent gateway and management layer for the internal OpenSandbox service.
+
+## Architecture Overview
+
+The API is split into four primary modules to ensure a clean separation of concerns:
+
+-   **`models.py`**: Data Transfer Objects (DTOs) and validation schemas.
+-   **`config.py`**: Environment-based configuration and security headers.
+-   **`backends.py`**: Logic for interacting with the execution clusters.
+-   **`codeinspectior_api.py`**: The application entry point and routing layer.
 
 ---
 
-## 1. Base Schemas & Models
-These Pydantic models validate and structure the data passing through the basic health and diagnostic interfaces of the gateway itself.
+## Component Details
 
-*   **`Language (Enum)`**: Strictly defines the execution languages that the gateway officially acknowledges (Python, JavaScript, Bash).
-*   **`RunRequest`**: Validates the payload for diagnostic execution requests (verifying the code format, language type, and timeout limits).
-*   **`RunResponse`**: Structures the expected response from a code execution command, providing fields for `stdout`, `stderr`, execution time, and standard exit codes.
-*   **`SessionResponse` & `StatusResponse`**: Helper models used to standardize the system diagnostics, ensuring health checks and routing sessions have a predictable JSON format.
+### 1. `models.py`
+This module defines the "language" used by the API. It uses **Pydantic** to enforce strict data validation for all incoming and outgoing requests.
+-   **Execution Models**: `RunRequest` and `RunResponse` handle the core code execution requests.
+-   **Sandbox Lifecycle**: `CreateSandboxRequest` and `SandboxResponse` define the requirements for provisioning new isolated environments.
+-   **Enums**: `Language` restricts execution to specific supported runtimes (Python, JavaScript, Bash).
 
-## 2. Kubernetes Configuration & Environment Config
-The API is designed to operate dynamically in a Kubernetes cluster natively via environments.
+### 2. `config.py`
+This module handles all external dependencies and environment-specific settings.
+-   **Base URL**: `opensandbox_base_url()` dynamically resolves the upstream service address (usually a Kubernetes ClusterIP service).
+-   **Headers**: `opensandbox_headers()` centralizes the management of the `OPEN-SANDBOX-API-KEY`, ensuring that every request to the backend is authenticated correctly.
 
-*   **`opensandbox_base_url()`**: Fetches the cluster-internal DNS address for the backend from memory (`BACKEND_URL_OPENSANDBOX`). Defaults to `http://opensandbox-server:80`. This cleanly isolates the gateway from the backend.
-*   **`opensandbox_headers()`**: Dynamically creates the strict authorization headers—injecting the `OPEN-SANDBOX-API-KEY` required to authenticate and interact securely with the OpenSandbox backend. 
+### 3. `backends.py`
+This module implements the **Strategy Pattern**.
+-   **`SandboxBackend` (Abstract)**: An interface that defines what any execution backend *must* do (run code, create sandboxes, check health).
+-   **`GenericHTTPBackend` (Concrete)**: The actual implementation that communicates with the OpenSandbox server via HTTP. It handles:
+    -   Network timeouts.
+    -   Error wrapping.
+    -   Response parsing and mapping.
 
-## 3. The Backend Abstraction Model
-*   **`SandboxBackend (ABC)`**: An abstract interface defining the core contract elements that any sandbox connector must follow (`run`, `open_session`, `health_check`). This makes the API extensible—if you want to add a different backend engine in the future natively, you just inherit from this class.
+### 4. `codeinspectior_api.py`
+This is the "brain" of the application. It initializes the FastAPI app and sets up the routes.
+-   **App State**: Initializes the global `state.backend` based on configuration.
+-   **Native Routes**: Provides high-level, typed endpoints like `/v1/sandboxes`.
+-   **Transparent Proxy**: Contains the `_do_proxy` helper which forwards any request under `/backend/opensandbox/*` directly to the backend while injecting authentication and stripping unnecessary headers.
+-   **Dynamic Documentation**: Bridges the gap between the local API and the remote service by fetching and patching the backend's `openapi.json` on the fly.
 
-## 4. `GenericHTTPBackend` Implementation
-This is the workhorse class that actively links the Gateway to the OpenSandbox Server.
+---
 
-*   **`__init__`**: Stores the backend's name and REST URL.
-*   **`run()`**: A synchronous diagnostic execution method. It utilizes the synchronous `httpx.Client` to dispatch dummy code execution directly to the `/run` endpoint of the backend to verify the backend sandbox engine is completely functional.
-*   **`open_session()` / `close_session()`**: Simulates session attachment tracking by assigning simple UUID validations.
-*   **`health_check()`**: Reaches out to the upstream `/health` endpoint to ensure the upstream Kubernetes deployment is reachable, returning `True` or `False`.
+## Request Lifecycle (Example: Sandbox Creation)
 
-## 5. Global State & App Instantiation
-*   **`AppState`**: A singleton state manager. It initializes the `GenericHTTPBackend` immediately pointing at the internal OpenSandbox Kubernetes address.
-*   **`lifespan(app: FastAPI)`**: The startup routine hook that safely validates and logs cluster parameters when the Uvicorn server turns on, printing the destination URL to the logs for transparent infrastructure debugging.
-*   **`app = FastAPI(...)`**: Instantiates the FastAPI application application, dictating basic OpenAPI properties for the proxy itself (served at `/docs`).
+1.  **Incoming Request**: A client sends a POST request to `/v1/sandboxes` with a JSON payload.
+2.  **Validation**: FastAPI uses the `CreateSandboxRequest` model from `models.py` to validate the image spec and resource limits.
+3.  **Backend Dispatch**: The route calls `state.backend.create_sandbox(req)`.
+4.  **HTTP Transmission**: The `GenericHTTPBackend` (in `backends.py`) fetches the API key from `config.py`, wraps the request, and sends it to the internal OpenSandbox service.
+5.  **Response Handling**: The response from the backend is parsed into a `SandboxResponse` and returned to the client.
 
-## 6. General API Interfaces
-*   **`@app.get("/health")`**: Evaluates `state.backend.health_check()`. It confirms whether both the gateway itself is alive AND whether the proxy connection to the backend is uninterrupted.
-*   **`@app.post("/run")`**: An internal testing endpoint that utilizes the backend's REST bridge directly. Used locally to check standard task completion without utilizing heavy API proxying.
+## Benefits of this Modularization
 
-## 7. OpenSandbox Proxy Forwarding (The Core Feature)
-This section actively intercepts and forwards API calls.
-
-*   **`/backend/opensandbox/docs`**: Rather than redirecting users to the backend or failing, this dynamically serves a local Swagger UI that operates explicitly on the patched remote OpenAPI specification.
-*   **`/backend/opensandbox/openapi.json`**: This function connects to the OpenSandbox internal service, clones its layout specification data JSON, rewrites the root `servers` URL to point implicitly to `/backend/opensandbox` locally, and injects API security context safely. It tricks Swagger UI into securely targeting our gateway logic flawlessly.
-*   **`_do_proxy(proxy_path: str, request: Request)`**: The brain of the API Gateway natively. 
-    1.  Receives explicit dynamic `{proxy_path}` variables.
-    2.  Builds the destination `target_url` mapped to the internal Kubernetes Backend.
-    3.  Strips explicit `content-length` or `host` headers to ensure proxy headers do not clash seamlessly.
-    4.  Injects the `OPEN-SANDBOX-API-KEY`.
-    5.  Asynchronously streams request parameters, HTTP body payloads, and headers logically into the backend URL using `httpx.AsyncClient`.
-    6.  Takes the verbatim HTTP response, cleans the encoding headers predictably safely, and mirrors it logically back to the client.
-
-*   **`proxy_get / proxy_post / proxy_put / proxy_delete / proxy_patch`**:
-    *   Previously, combining them caused Swagger UI rendering mapping conflicts rendering only `PATCH`. By dynamically isolating `POST`, `PUT`, `GET`, etc., into mutually exclusive routing mechanisms asynchronously utilizing `_do_proxy()`, we force HTTP protocol alignment correctly natively in all interfaces. This is what handles user requests flawlessly securely.
+-   **Readability**: Each file is focused on one task (Modeling, Config, Logic, or Routing).
+-   **Maintainability**: You can change how backends work in `backends.py` without touching the route definitions in `codeinspectior_api.py`.
+-   **Extensibility**: To add a new backend type (e.g., AWS Lambda or Docker), you simply create a new class in `backends.py` that inherits from `SandboxBackend`.
+-   **DRY (Don't Repeat Yourself)**: Configuration and authentication logic are defined once in `config.py` and reused across both native routes and the proxy system.
