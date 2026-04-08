@@ -174,9 +174,11 @@ async def create_scan_job(
     # Base path for shared storage (mounted via PVC in Helm)
     data_root = os.environ.get("SCAN_DATA_ROOT", "/data")
     job_dir = os.path.join(data_root, job_id, "workspace")
+    results_dir = os.path.join(data_root, job_id, "results")
     
     try:
         os.makedirs(job_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
         
         for filename, content in scan_request.files.items():
             # Basic path sanitization to prevent directory traversal
@@ -208,15 +210,23 @@ async def create_scan_job(
         image=ImageSpec(uri="codeinterpreter:3.1.0"), # Using the version we verified earlier
         resourceLimits=SchemaResourceLimits(root={"cpu": "1", "memory": "2Gi"}),
         entrypoint=["/opt/opensandbox/code-interpreter.sh"],
-        volumes=[Volume(
-            name="workspace",
-            pvc=PVC(claimName="scan-pvc"),
-            mountPath="/workspace", 
-            subPath=f"{job_id}/workspace"
-        )],
+        volumes=[
+            Volume(
+                name="workspace",
+                pvc=PVC(claimName="scan-pvc"),
+                mountPath="/workspace", 
+                subPath=f"{job_id}/workspace"
+            ),
+            Volume(
+                name="results",
+                pvc=PVC(claimName="scan-pvc"),
+                mountPath="/results", 
+                subPath=f"{job_id}/results"
+            )
+        ],
         env={
             "SCAN_DIR": "/workspace", 
-            "SCAN_REPORT": "/workspace/security_scan_report.json"
+            "SCAN_REPORT": "/results/security_scan_report.json"
         },
         timeout=scan_request.timeout or 300,
         metadata=scan_request.metadata
