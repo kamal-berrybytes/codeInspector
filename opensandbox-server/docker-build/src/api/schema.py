@@ -523,6 +523,10 @@ class ScanJobRequest(BaseModel):
         None, 
         description="A mapping of filenames to their contents (plain text or base64)."
     )
+    tools: Optional[List[str]] = Field(
+        None,
+        description="A list of specific security tools to run (e.g., ['bandit', 'semgrep']). If omitted, relevant tools are auto-detected."
+    )
     timeout: Optional[int] = Field(
         300,
         ge=60,

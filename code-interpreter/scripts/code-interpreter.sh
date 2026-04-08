@@ -192,6 +192,14 @@ run_security_scans() {
     # Ensure global binary paths are at the front of the PATH
     export PATH="/usr/local/bin:/root/.local/bin:$PATH"
 
+    # Conditional trigger: Only scan if there are files in /workspace
+    if [ ! "$(ls -A /workspace 2>/dev/null)" ]; then
+        echo " [SKIP]    No files found in /workspace. Skipping automated scans."
+        echo "---------------------------------------------"
+        echo "============================================="
+        return 0
+    fi
+
     # First, ensure we source the Python environment so the orchestrator runs correctly.
     # We use the system-managed python with breaking system packages enabled for the tools.
     if [ -f /opt/opensandbox/code-interpreter-env.sh ]; then

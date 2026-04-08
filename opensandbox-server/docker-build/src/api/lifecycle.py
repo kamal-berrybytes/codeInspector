@@ -226,7 +226,8 @@ async def create_scan_job(
         ],
         env={
             "SCAN_DIR": "/workspace", 
-            "SCAN_REPORT": "/results/security_scan_report.json"
+            "SCAN_REPORT": "/results/security_scan_report.json",
+            "SCAN_TOOLS": ",".join(scan_request.tools) if scan_request.tools else ""
         },
         timeout=scan_request.timeout or 300,
         metadata=scan_request.metadata

@@ -14,6 +14,7 @@ logging.basicConfig(
 
 SCAN_DIR = os.getenv("SCAN_DIR", "/workspace")
 REPORT_PATH = os.getenv("SCAN_REPORT", "/tmp/security_scan_report.json")
+SCAN_TOOLS_ENV = os.getenv("SCAN_TOOLS", "") # Comma-separated list of tools to run
 
 class ScannerOrchestrator:
     """Orchestrates security scanning tools for code-interpreter sandboxes."""
@@ -22,12 +23,49 @@ class ScannerOrchestrator:
         self.target_dir = target_dir
         self.results = {
             "target": target_dir,
+            "files_scanned": [],
             "scans": {}
         }
+        self.enabled_tools = self._get_enabled_tools()
+
+    def _get_enabled_tools(self) -> List[str]:
+        """Determines which tools should be run based on env vars and file types."""
+        all_files = []
+        for root, _, files in os.walk(self.target_dir):
+            for file in files:
+                all_files.append(os.path.join(root, file))
+        
+        self.results["files_scanned"] = [os.path.relpath(f, self.target_dir) for f in all_files]
+        
+        logging.info("=============================================")
+        logging.info(f" Discovering files in {self.target_dir}:")
+        for f in self.results["files_scanned"]:
+            logging.info(f"  - {f}")
+        logging.info("=============================================")
+
+        if SCAN_TOOLS_ENV:
+            requested = [t.strip().lower() for t in SCAN_TOOLS_ENV.split(",") if t.strip()]
+            logging.info(f" User specified tools: {requested}")
+            return requested
+
+        # Auto-detection logic
+        enabled = ["semgrep", "gitleaks", "trivy"] # Core tools enabled by default
+        
+        has_python = any(f.endswith(".py") for f in self.results["files_scanned"])
+        has_yaml = any(f.endswith((".yaml", ".yml")) for f in self.results["files_scanned"])
+        
+        if has_python:
+            logging.info("  [Auto-Detect] Python files found. Enabling Bandit.")
+            enabled.append("bandit")
+        if has_yaml:
+            logging.info("  [Auto-Detect] YAML files found. Enabling YAMLlint.")
+            enabled.append("yamllint")
+            
+        return enabled
 
     def run_command(self, cmd: List[str], tool_name: str) -> Dict[str, Any]:
         """Runs a scanning command and returns its exit code and summary."""
-        logging.info(f"Running {tool_name} scan on {self.target_dir}...")
+        logging.info(f" Running {tool_name} scan...")
         try:
             process = subprocess.run(
                 cmd,
@@ -42,15 +80,14 @@ class ScannerOrchestrator:
                 "status": "COMPLETED" if process.returncode == 0 else "ISSUES_FOUND"
             }
         except FileNotFoundError:
-            logging.warning(f"{tool_name} not found on the PATH.")
+            logging.warning(f" {tool_name} not found on the PATH.")
             return {"status": "NOT_FOUND"}
         except Exception as e:
-            logging.error(f"Error running {tool_name}: {str(e)}")
+            logging.error(f" Error running {tool_name}: {str(e)}")
             return {"status": "ERROR", "error": str(e)}
 
     def scan_semgrep(self):
         """Runs Semgrep static analysis."""
-        # Try global bin path first
         cmd = ["/usr/local/bin/semgrep", "scan", "--config=auto", "--quiet", "--error", self.target_dir]
         res = self.run_command(cmd, "Semgrep")
         if res["status"] == "NOT_FOUND":
@@ -95,12 +132,12 @@ class ScannerOrchestrator:
         self.results["scans"]["trivy"] = res
 
     def run_all(self):
-        """Executes all registered scanners."""
-        self.scan_semgrep()
-        self.scan_gitleaks()
-        self.scan_yamllint()
-        self.scan_bandit()
-        self.scan_trivy()
+        """Executes enabled scanners."""
+        if "semgrep" in self.enabled_tools: self.scan_semgrep()
+        if "gitleaks" in self.enabled_tools: self.scan_gitleaks()
+        if "yamllint" in self.enabled_tools: self.scan_yamllint()
+        if "bandit" in self.enabled_tools: self.scan_bandit()
+        if "trivy" in self.enabled_tools: self.scan_trivy()
         self.save_results()
 
     def save_results(self):
@@ -112,6 +149,10 @@ class ScannerOrchestrator:
         logging.info("  Security scanning cycle complete.")
         logging.info(f"  Report saved to: {REPORT_PATH}")
         logging.info("=============================================")
+
+if __name__ == "__main__":
+    orchestrator = ScannerOrchestrator(SCAN_DIR)
+    orchestrator.run_all()
 
 if __name__ == "__main__":
     orchestrator = ScannerOrchestrator(SCAN_DIR)
