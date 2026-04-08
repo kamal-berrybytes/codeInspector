@@ -128,7 +128,7 @@ opensandboxResourcePool:
   pool:
     name: my-sandbox-pool
     container:
-      image: codeintepreter:1.0.0
+      image: codeinterpreter:3.1.0
       ports:
         - containerPort: 44772
         - containerPort: 54321

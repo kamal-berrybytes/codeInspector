@@ -132,12 +132,6 @@ setup_bash() {
 	}
 }
 
-# ── Install missing security scanning tools ───────────────────────────────────
-setup_security_tools() {
-	echo "Installing missing security scanning tools..."
-	pip install semgrep yamllint bandit --break-system-packages --quiet
-}
-
 # Export go bin path
 export PATH="$(go env GOPATH)/bin:$PATH"
 if [ -n "${EXECD_ENVS:-}" ]; then
@@ -155,8 +149,8 @@ setup_go &
 pids+=($!)
 setup_bash &
 pids+=($!)
-setup_security_tools &
-pids+=($!)
+
+# Security tools are now pre-installed in the base image.
 
 # ── Security Scanning Tools — startup verification ────────────────────────────
 # Wait for all background setup jobs to complete before verification
@@ -189,40 +183,25 @@ echo "---------------------------------------------"
 echo " PATH: ${PATH}"
 echo "============================================="
 
-# ── Dynamic Security Scanning ─────────────────────────────────────────────────
+# ── Automated Security Scanning ───────────────────────────────────────────────
 run_security_scans() {
     echo "============================================="
     echo "  Automated Security Scanning — /workspace"
     echo "---------------------------------------------"
 
-    # Semgrep - Static Analysis
-    if command -v semgrep >/dev/null 2>&1; then
-        echo " [RUNNING]  Semgrep scan..."
-        semgrep scan --config=auto --quiet --error /workspace || echo " [WARN]     Semgrep found potential issues"
+    # Ensure global binary paths are at the front of the PATH
+    export PATH="/usr/local/bin:/root/.local/bin:$PATH"
+
+    # First, ensure we source the Python environment so the orchestrator runs correctly.
+    # We use the system-managed python with breaking system packages enabled for the tools.
+    if [ -f /opt/opensandbox/code-interpreter-env.sh ]; then
+        source /opt/opensandbox/code-interpreter-env.sh python 3.12 
     fi
 
-    # YAMLlint - Configuration Check
-    if command -v yamllint >/dev/null 2>&1; then
-        echo " [RUNNING]  YAMLlint scan..."
-        yamllint -d "{extends: relaxed, rules: {line-length: disable}}" /workspace || echo " [WARN]     YAMLlint found potential issues"
-    fi
-
-    # Bandit - Python Security
-    if command -v bandit >/dev/null 2>&1; then
-        echo " [RUNNING]  Bandit scan (Python)..."
-        bandit -r /workspace -q || echo " [WARN]     Bandit found potential issues"
-    fi
-
-    # Gitleaks - Secret Detection
-    if command -v gitleaks >/dev/null 2>&1; then
-        echo " [RUNNING]  Gitleaks scan (Secrets)..."
-        gitleaks detect --source /workspace --no-git --report-format json --no-banner || echo " [WARN]     Gitleaks found potential secrets"
-    fi
-
-    # Trivy - General Vulnerabilities
-    if command -v trivy >/dev/null 2>&1; then
-        echo " [RUNNING]  Trivy scan (FS)..."
-        trivy fs --scanners vuln,secret,config --quiet /workspace || echo " [WARN]     Trivy found potential issues"
+    if [ -f /opt/opensandbox/src/scanner_orchestrator.py ]; then
+        python3 /opt/opensandbox/src/scanner_orchestrator.py
+    else
+        echo " [ERROR]   Scanner orchestrator not found at /opt/opensandbox/src/scanner_orchestrator.py"
     fi
 
     echo "---------------------------------------------"
@@ -230,8 +209,9 @@ run_security_scans() {
     echo "============================================="
 }
 
-# Execute scans automatically on startup
+# Execute security scans automatically on startup before Jupyter starts
 run_security_scans
+# ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 
 jupyter notebook --ip=127.0.0.1 --port="${JUPYTER_PORT:-44771}" --allow-root --no-browser --NotebookApp.token="${JUPYTER_TOKEN:-opensandboxcodeinterpreterjupyter}" >/opt/opensandbox/jupyter.log
