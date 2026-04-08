@@ -106,8 +106,63 @@ RUN mkdir -p ${GO_ROOT} && \
 ENV GOROOT=${GO_ROOT}/${GO_V1_25} \
     PATH="${NODE_ROOT}/v${NODE_V22}/bin:${GO_ROOT}/${GO_V1_25}/bin:${PATH}"
 
+# 8. Install Security Scanning Tools
+# Install system-level dependencies for tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libseccomp2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python-based tools directly into /usr/local/bin
+# (Bypassing pipx to ensure absolute binary availability)
+RUN set -eux; \
+    UV_BREAK_SYSTEM_PACKAGES=1 uv pip install --system --python 3.12 --no-cache \
+        semgrep \
+        yamllint \
+        bandit; \
+    # Ensure they are in /usr/local/bin (uv --system should do this, but we'll be certain)
+    ln -sf $(uv python which 3.12 | sed 's/python3/semgrep/') /usr/local/bin/semgrep || true; \
+    ln -sf $(uv python which 3.12 | sed 's/python3/yamllint/') /usr/local/bin/yamllint || true; \
+    ln -sf $(uv python which 3.12 | sed 's/python3/bandit/') /usr/local/bin/bandit || true
+
+# gitleaks (static binary)
+RUN set -eux; \
+    GITLEAKS_VERSION="8.18.4"; \
+    ARCH=""; \
+    case "${TARGETARCH}" in \
+      "amd64") ARCH="x64" ;; \
+      "arm64") ARCH="arm64" ;; \
+      *) ARCH="x64" ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${ARCH}.tar.gz" \
+        | tar -xz -C /usr/local/bin gitleaks; \
+    chmod 755 /usr/local/bin/gitleaks
+
+# trivy (static binary)
+RUN set -eux; \
+    TRIVY_VERSION="0.69.3"; \
+    ARCH=""; \
+    case "${TARGETARCH}" in \
+      "amd64") ARCH="64bit" ;; \
+      "arm64") ARCH="ARM64" ;; \
+      *) ARCH="64bit" ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${ARCH}.tar.gz" \
+        | tar -xz -C /usr/local/bin trivy; \
+    chmod 755 /usr/local/bin/trivy
+
+# Verify tools are on the global PATH
+RUN set -eux; \
+    semgrep --version; \
+    yamllint --version; \
+    bandit --version; \
+    gitleaks version; \
+    trivy --version
+
 RUN mkdir -p /opt/opensandbox
 COPY scripts/code-interpreter-env.sh /opt/opensandbox/code-interpreter-env.sh
 RUN chmod +x /opt/opensandbox/code-interpreter-env.sh
+
 
 CMD ["/bin/bash"]
