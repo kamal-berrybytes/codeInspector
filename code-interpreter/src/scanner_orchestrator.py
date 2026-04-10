@@ -101,6 +101,7 @@ class ScannerOrchestrator:
         if res.get("stdout"):
             try:
                 data = json.loads(res["stdout"])
+                res["stdout"] = data
                 results = data.get("results", [])
                 if results:
                     res["status"] = "ISSUES_FOUND"
@@ -131,6 +132,7 @@ class ScannerOrchestrator:
             try:
                 with open(report_path, "r") as f:
                     leaks = json.load(f)
+                    res["stdout"] = leaks
                     if leaks:
                         res["status"] = "ISSUES_FOUND"
                     for leak in leaks:
@@ -176,6 +178,7 @@ class ScannerOrchestrator:
         if res.get("stdout"):
             try:
                 data = json.loads(res["stdout"])
+                res["stdout"] = data
                 results = data.get("results", [])
                 if results:
                     res["status"] = "ISSUES_FOUND"
@@ -209,6 +212,7 @@ class ScannerOrchestrator:
         if res.get("stdout"):
             try:
                 data = json.loads(res["stdout"])
+                res["stdout"] = data
                 issues_found = False
                 for result in data.get("Results", []):
                     # Parse vulnerabilities
