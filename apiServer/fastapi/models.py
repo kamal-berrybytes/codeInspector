@@ -75,8 +75,9 @@ class SandboxResponse(BaseModel):
 
 class ScanJobRequest(BaseModel):
     """Payload representing a request to submit files for security scanning."""
-    files: dict[str, str] = Field(..., description="Map of filename to content (string or base64)")
-    tools: Optional[list[str]] = Field(None, description="Optional list of tools to run (e.g., semgrep, bandit)")
+    files: Optional[dict[str, str]] = Field(None, description="Map of filename to content")
+    code: Optional[str] = Field(None, description="Single code snippet for auto-detection")
+    tools: Optional[list[str]] = Field(None, description="Optional list of tools to run")
     timeout: Optional[int] = Field(None, ge=1, le=3600)
     metadata: dict[str, str] = {}
 
