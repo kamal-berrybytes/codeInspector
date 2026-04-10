@@ -20,10 +20,16 @@ All business logic is delegated to the service layer that backs each operation.
 """
 
 from typing import List, Optional, Any
+import os
+import re
+import json
+import base64
+import asyncio
+from uuid import uuid4
 import httpx
 from fastapi import APIRouter, Header, Query, Request, status, Body
 from fastapi.exceptions import HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse, JSONResponse, FileResponse
 
 from src.api.schema import (
     CreateSandboxRequest,
@@ -57,6 +63,34 @@ HOP_BY_HOP_HEADERS = {
     "transfer-encoding",
     "upgrade",
 }
+
+def detect_extension(content: str) -> str:
+    """Detects the best file extension for a code snippet using heuristics."""
+    if not content:
+        return "py"
+    
+    # Check for JSON first (strict structure)
+    stripped = content.strip()
+    if (stripped.startswith("{") and stripped.endswith("}")) or (stripped.startswith("[") and stripped.endswith("]")):
+        return "json"
+
+    # Check for YAML
+    if content.startswith("---") or re.search(r"^(apiVersion|metadata|version|services|spec):", content, re.MULTILINE):
+        return "yaml"
+    
+    # Check for Go
+    if content.startswith("package ") or "func main()" in content:
+        return "go"
+
+    # PRIORITIZE PYTHON: Check for Python-specific markers
+    if re.search(r"^\s*(#|def |from .* import |if __name__ ==)", content, re.MULTILINE) or "print(" in content:
+        return "py"
+    
+    # Check for Javascript
+    if re.search(r"\b(const|let|var|function|console\.log)\s", content) or "require(" in content:
+        return "js"
+        
+    return "py" # Default to Python
 
 # Headers that shouldn't be forwarded to untrusted/internal backends
 SENSITIVE_HEADERS = {
@@ -163,33 +197,50 @@ async def create_scan_job(
         if isinstance(data, dict):
             scan_request = ScanJobRequest(**data)
     except Exception:
-        # Not a valid JSON or doesn't match schema; will be treated as raw code below
-        pass
-
-    if not scan_request or not scan_request.files:
-        # Treat the entire body as a single Python file if it's not a JSON ScanJobRequest
-        scan_request = ScanJobRequest(files={"main.py": body_str})
+        # Fallback: create an empty request object if parsing fails
+        scan_request = ScanJobRequest()
 
     job_id = str(uuid4())
     # Base path for shared storage (mounted via PVC in Helm)
     data_root = os.environ.get("SCAN_DATA_ROOT", "/data")
     job_dir = os.path.join(data_root, job_id, "workspace")
-    results_dir = os.path.join(data_root, job_id, "results")
+    reports_dir = os.path.join(data_root, job_id, "reports")
+
+    # Logic for auto-detecting language if using the simplified 'code' field
+    # or if a generic filename like 'code' or 'main' is provided.
+    files_to_save = {}
+    if scan_request:
+        if scan_request.code:
+            ext = detect_extension(scan_request.code)
+            files_to_save[f"main.{ext}"] = scan_request.code
+        elif scan_request.files:
+            for filename, content in scan_request.files.items():
+                base_name = os.path.basename(filename)
+                # If the filename has no extension or is generic, attempt to fix it
+                if "." not in base_name or base_name.lower().startswith(("main", "code")):
+                    ext = detect_extension(content)
+                    name_without_ext = base_name.split(".")[0]
+                    files_to_save[f"{name_without_ext}.{ext}"] = content
+                else:
+                    files_to_save[filename] = content
     
+    # If no files have been identified yet, treat the entire body text
+    if not files_to_save:
+        ext = detect_extension(body_str)
+        files_to_save[f"main.{ext}"] = body_str
+
     try:
         os.makedirs(job_dir, exist_ok=True)
-        os.makedirs(results_dir, exist_ok=True)
+        os.makedirs(reports_dir, exist_ok=True)
         
-        for filename, content in scan_request.files.items():
-            # Basic path sanitization to prevent directory traversal
+        for filename, content in files_to_save.items():
+            # Basic path sanitization
             safe_filename = os.path.basename(filename)
             file_path = os.path.join(job_dir, safe_filename)
             
             # Identify if content is base64 encoded
             try:
                 # If it looks like base64, decode it; otherwise write as plain text.
-                # Common heuristic: check if it can be decoded as base64 without error.
-                # For safety, we try to decode.
                 decoded_content = base64.b64decode(content, validate=True)
                 with open(file_path, "wb") as f:
                     f.write(decoded_content)
@@ -207,9 +258,15 @@ async def create_scan_job(
     # Construct the sandbox creation request
     # Note: We use the shared PVC name defined in our Helm chart
     sandbox_req = CreateSandboxRequest(
-        image=ImageSpec(uri="codeinterpreter:3.1.0"), # Using the version we verified earlier
+        image=ImageSpec(uri="codeinterpreter:3.1.0"),
         resourceLimits=SchemaResourceLimits(root={"cpu": "1", "memory": "2Gi"}),
         entrypoint=["/opt/opensandbox/code-interpreter.sh"],
+        timeout=scan_request.timeout if scan_request and scan_request.timeout else 300,
+        env={
+            "SCAN_DIR": "/workspace", 
+            "SCAN_REPORT": "/reports/security_scan_report.json",
+            "SCAN_TOOLS": ",".join(scan_request.tools) if scan_request and scan_request.tools else ""
+        },
         volumes=[
             Volume(
                 name="workspace",
@@ -218,19 +275,13 @@ async def create_scan_job(
                 subPath=f"{job_id}/workspace"
             ),
             Volume(
-                name="results",
+                name="reports",
                 pvc=PVC(claimName="scan-pvc"),
-                mountPath="/results", 
-                subPath=f"{job_id}/results"
+                mountPath="/reports", 
+                subPath=f"{job_id}/reports"
             )
         ],
-        env={
-            "SCAN_DIR": "/workspace", 
-            "SCAN_REPORT": "/results/security_scan_report.json",
-            "SCAN_TOOLS": ",".join(scan_request.tools) if scan_request.tools else ""
-        },
-        timeout=scan_request.timeout or 300,
-        metadata=scan_request.metadata
+        metadata=scan_request.metadata if scan_request else {}
     )
 
     created_sandbox = sandbox_service.create_sandbox(sandbox_req)
@@ -239,6 +290,53 @@ async def create_scan_job(
         job_id=job_id,
         sandbox_id=created_sandbox.id
     )
+
+
+@router.get("/scan-jobs/{job_id}/report", tags=["Security Scan Pipeline"])
+async def get_scan_report(job_id: str):
+    """
+    Retrieves the persistent security scan report for a specific job ID.
+    This report is stored on the PVC and lives beyond the sandbox lifecycle.
+    """
+    import os
+    import json
+    data_root = os.environ.get("SCAN_DATA_ROOT", "/data")
+    report_path = os.path.join(data_root, job_id, "reports", "security_scan_report.json")
+    
+    if not os.path.exists(report_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "REPORT_NOT_FOUND", "message": f"No report found for job {job_id}. The scan may still be in progress."}
+        )
+        
+    try:
+        with open(report_path, "r") as f:
+            content = json.load(f)
+        return content
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "FILE_READ_ERROR", "message": str(e)}
+        )
+
+
+@router.get("/scan-jobs/{job_id}/workspace/{file_path:path}", tags=["Security Scan Pipeline"])
+async def get_scan_source(job_id: str, file_path: str):
+    """
+    Retrieves a specific source file uploaded during a scan job.
+    """
+    import os
+    data_root = os.environ.get("SCAN_DATA_ROOT", "/data")
+    safe_file = os.path.basename(file_path) # Basic safety
+    full_path = os.path.join(data_root, job_id, "workspace", safe_file)
+    
+    if not os.path.exists(full_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "FILE_NOT_FOUND", "message": f"Source file {file_path} not found for job {job_id}."}
+        )
+        
+    return FileResponse(full_path)
 
 
 # Search endpoint

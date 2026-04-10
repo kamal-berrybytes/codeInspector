@@ -71,3 +71,18 @@ class SandboxResponse(BaseModel):
     status: str
     image: ImageSpec
     metadata: dict[str, str] = {}
+
+
+class ScanJobRequest(BaseModel):
+    """Payload representing a request to submit files for security scanning."""
+    files: Optional[dict[str, str]] = Field(None, description="Map of filename to content")
+    code: Optional[str] = Field(None, description="Single code snippet for auto-detection")
+    tools: Optional[list[str]] = Field(None, description="Optional list of tools to run")
+    timeout: Optional[int] = Field(None, ge=1, le=3600)
+    metadata: dict[str, str] = {}
+
+
+class ScanJobResponse(BaseModel):
+    """Response returned upon successfully scheduling a scan job."""
+    job_id: str
+    sandbox_id: Optional[str] = None
