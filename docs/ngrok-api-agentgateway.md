@@ -105,10 +105,14 @@ Through testing, we finalized the exact mechanisms required to interface correct
 
 ## 6. Processes for Authenticating and Accessing the API
 
-Depending on the client used to access the `dipper-shun-glowing.ngrok-free.dev` domain, the API key must be injected differently. The AgentGateway will block any request that lacks the proper authorization headers before it ever reaches the backend.
+When sharing your API, **you should provide the domain `https://dipper-shun-glowing.ngrok-free.dev`.**
+
+**However, there is a very important catch when dealing with strict API Key enforcement!**
+
+Because your AgentGateway is doing its job and strictly enforcing the API key for every request on this domain, you cannot simply type `https://dipper-shun-glowing.ngrok-free.dev/docs` into a normal browser window. If you or someone else tries to visit that URL in Google Chrome or Firefox, the browser does not send the `Authorization: Bearer...` header by default. The AgentGateway will immediately block the browser and return a `401 Unauthorized` blank page.
 
 ### A. Accessing via Web Browser (Viewing Swagger `/docs`)
-Browsers do not natively allow the injection of custom headers when navigating via the address bar. Attempting to visit `https://dipper-shun-glowing.ngrok-free.dev/docs` directly will result in a `401 Unauthorized` page. 
+Because of the limitation described above, you must use a workaround if you wish to visually browse the Swagger UI.
 
 **Workaround Process:**
 1. Install a header modification extension (e.g., **ModHeader** for Chrome/Firefox).
@@ -144,4 +148,14 @@ print(response.json())
 ```bash
 curl -X GET "https://dipper-shun-glowing.ngrok-free.dev/health" \
   -H "Authorization: Bearer N2YwMDIxZTEtNGUzNS1jNzgzLTRkYjAtYjE2YzRkZGVmNjcy"
+```
+
+**cURL Example (CLI): POST request for scan job**
+```
+curl -X POST "https://dipper-shun-glowing.ngrok-free.dev/backend/opensandbox/v1/scan-jobs" \
+  -H "Authorization: Bearer N2YwMDIxZTEtNGUzNS1jNzgzLTRkYjAtYjE2YzRkZGVmNjcy" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "import os\nimport sqlite3\n\ndef run_command(user_input):\n    os.system(f\"echo {user_input}\")\n\ndef db_query(user_name):\n    conn = sqlite3.connect(\"example.db\")\n    cursor = conn.cursor()\n    cursor.execute(f\"SELECT * FROM users WHERE name = {user_name}\")\n"
+}'
 ```
