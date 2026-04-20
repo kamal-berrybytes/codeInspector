@@ -50,7 +50,7 @@ class ScannerOrchestrator:
             return requested
 
         # Default to running all comprehensive tools as requested
-        return ["semgrep", "gitleaks", "trivy", "bandit", "yamllint"]
+        return ["semgrep", "gitleaks", "trivy", "bandit", "yamllint", "kubelinter", "kubeconform", "kubescore"]
 
     def run_command(self, cmd: List[str], tool_name: str) -> Dict[str, Any]:
         """Runs a scanning command and returns its exit code and summary."""
@@ -242,6 +242,122 @@ class ScannerOrchestrator:
                 
         self.results["scans"]["trivy"] = res
 
+    def scan_kubelinter(self):
+        """Runs kube-linter for Kubernetes manifests and parses JSON findings."""
+        if not any(f.endswith((".yaml", ".yml")) for f in self.results["files_scanned"]):
+            self.results["scans"]["kubelinter"] = {"status": "SKIPPED", "reason": "No YAML files"}
+            return
+
+        cmd = ["/usr/local/bin/kube-linter", "lint", self.target_dir, "--format", "json"]
+        res = self.run_command(cmd, "Kube-Linter")
+        if res["status"] == "NOT_FOUND":
+            cmd[0] = "kube-linter"
+            res = self.run_command(cmd, "Kube-Linter")
+        
+        if res.get("stdout"):
+            try:
+                data = json.loads(res["stdout"])
+                res["stdout"] = data
+                reports = data.get("Reports", [])
+                if reports:
+                    res["status"] = "ISSUES_FOUND"
+                for report in reports:
+                    check = report.get("Check", {})
+                    obj = report.get("Object", {})
+                    self.results["findings"].append({
+                        "tool": "kubelinter",
+                        "file": report.get("Diagnostic", {}).get("ParsedObject", {}).get("Name", "unknown"),
+                        "line": None,
+                        "issue": f"{check.get('Name')}: {report.get('Remediation')}",
+                        "severity": "MEDIUM"
+                    })
+            except Exception as e:
+                logging.error(f" Failed to parse Kube-Linter JSON: {e}")
+        
+        self.results["scans"]["kubelinter"] = res
+
+    def scan_kubeconform(self):
+        """Runs kubeconform for strict Kubernetes schema validation and parses JSON findings."""
+        if not any(f.endswith((".yaml", ".yml")) for f in self.results["files_scanned"]):
+            self.results["scans"]["kubeconform"] = {"status": "SKIPPED", "reason": "No YAML files"}
+            return
+
+        cmd = ["/usr/local/bin/kubeconform", "-summary", "-output", "json", "-strict", self.target_dir]
+        res = self.run_command(cmd, "Kube-Conform")
+        if res["status"] == "NOT_FOUND":
+            cmd[0] = "kubeconform"
+            res = self.run_command(cmd, "Kube-Conform")
+        
+        if res.get("stdout"):
+            try:
+                data = json.loads(res["stdout"])
+                res["stdout"] = data
+                resources = data.get("resources", [])
+                has_errors = False
+                for resource in resources:
+                    if resource.get("status") != "valid":
+                        has_errors = True
+                        self.results["findings"].append({
+                            "tool": "kubeconform",
+                            "file": resource.get("filename", "unknown"),
+                            "line": None,
+                            "issue": f"Schema Error: {resource.get('msg')} ({resource.get('kind')} - {resource.get('version')})",
+                            "severity": "CRITICAL"
+                        })
+                if has_errors:
+                    res["status"] = "ISSUES_FOUND"
+                else:
+                    res["status"] = "COMPLETED"
+            except Exception as e:
+                logging.error(f" Failed to parse Kube-Conform JSON: {e}")
+        
+        self.results["scans"]["kubeconform"] = res
+
+    def scan_kubescore(self):
+        """Runs kube-score for deep best-practice analysis and parses JSON output."""
+        yaml_files = [os.path.join(self.target_dir, f) for f in self.results["files_scanned"] if f.endswith((".yaml", ".yml"))]
+        if not yaml_files:
+            self.results["scans"]["kubescore"] = {"status": "SKIPPED", "reason": "No YAML files"}
+            return
+
+        # Pass explicit file paths to avoid shell expansion issues
+        cmd = ["/usr/local/bin/kube-score", "score", "--output-format", "json"] + yaml_files
+        res = self.run_command(cmd, "Kube-Score")
+        if res["status"] == "NOT_FOUND":
+            cmd[0] = "kube-score"
+            res = self.run_command(cmd, "Kube-Score")
+        
+        if res.get("stdout"):
+            try:
+                data = json.loads(res["stdout"])
+                res["stdout"] = data
+                has_issues = False
+                for item in data:
+                    for check in item.get("checks", []):
+                        skipped = check.get("skipped", False)
+                        if skipped: continue
+                        
+                        # Grade 0 is OK, higher indicates issues
+                        grade = check.get("grade", 0)
+                        if grade > 0:
+                            has_issues = True
+                            comment = check.get("comments", [{}])[0]
+                            self.results["findings"].append({
+                                "tool": "kubescore",
+                                "file": item.get("object_meta", {}).get("name", "unknown"),
+                                "line": None,
+                                "issue": f"{check.get('check', {}).get('name')}: {comment.get('summary', '')}",
+                                "severity": "HIGH" if grade >= 10 else "MEDIUM"
+                            })
+                if has_issues:
+                    res["status"] = "ISSUES_FOUND"
+                else:
+                    res["status"] = "COMPLETED"
+            except Exception as e:
+                logging.error(f" Failed to parse Kube-Score JSON: {e}")
+        
+        self.results["scans"]["kubescore"] = res
+
     def run_all(self):
         """Executes enabled scanners."""
         if "semgrep" in self.enabled_tools: self.scan_semgrep()
@@ -249,6 +365,9 @@ class ScannerOrchestrator:
         if "yamllint" in self.enabled_tools: self.scan_yamllint()
         if "bandit" in self.enabled_tools: self.scan_bandit()
         if "trivy" in self.enabled_tools: self.scan_trivy()
+        if "kubelinter" in self.enabled_tools or not self.enabled_tools: self.scan_kubelinter()
+        if "kubeconform" in self.enabled_tools or not self.enabled_tools: self.scan_kubeconform()
+        if "kubescore" in self.enabled_tools or not self.enabled_tools: self.scan_kubescore()
         self._calculate_summary()
         self.save_results()
 
@@ -306,7 +425,7 @@ class ScannerOrchestrator:
         print(header)
         print(" " + "─"*12 + "╁" + "─"*17 + "╁" + "─"*37)
         
-        for tool in ["semgrep", "gitleaks", "yamllint", "bandit", "trivy"]:
+        for tool in ["semgrep", "gitleaks", "yamllint", "bandit", "trivy", "kubelinter", "kubeconform", "kubescore"]:
             if tool not in self.results["scans"]:
                 continue
                 
@@ -321,6 +440,9 @@ class ScannerOrchestrator:
                 if tool == "gitleaks": summary = "Credential/Secret leak detected!"
                 elif tool == "semgrep": summary = "Code logic vulnerabilities found."
                 elif tool == "bandit":  summary = "Python security anti-patterns detected."
+                elif tool == "kubelinter": summary = "K8s manifest security/best-practice issues."
+                elif tool == "kubeconform": summary = "Strict K8s schema/apiVersion violations."
+                elif tool == "kubescore": summary = "Production-readiness & security hardening risks."
                 else: summary = "Items requiring review discovered."
             elif status == "COMPLETED":
                 status_text = "✅ CLEAN"
