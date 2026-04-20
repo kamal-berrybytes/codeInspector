@@ -218,7 +218,8 @@ run_security_scans() {
 }
 
 # Execute security scans automatically on startup before Jupyter starts
-run_security_scans
+echo "[SANDBOX] Initializing scan environment..." >> /reports/process.log
+run_security_scans 2>&1 | tee -a /reports/process.log
 # ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 

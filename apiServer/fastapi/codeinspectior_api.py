@@ -243,7 +243,7 @@ async def get_scan_status(job_id: str):
     return state.backend.get_scan_status(job_id)
 
 
-@app.get("/v1/job_id", tags=["Security Scan Pipeline"])
+@app.get("/v1/job-id", tags=["Security Scan Pipeline"])
 async def get_latest_job_id():
     """
     Retrieves the job_id of the most recently initiated scan job in the current session.
@@ -254,7 +254,7 @@ async def get_latest_job_id():
     return {"job_id": state.latest_job_id}
 
 
-@app.get("/v1/job_status", tags=["Security Scan Pipeline"])
+@app.get("/v1/job-status", tags=["Security Scan Pipeline"])
 async def get_latest_job_status():
     """
     Retrieves the status of the most recently initiated scan job in the current session.
