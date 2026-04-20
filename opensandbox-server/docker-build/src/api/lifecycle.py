@@ -104,6 +104,22 @@ router = APIRouter(tags=["Sandboxes"])
 # Initialize service based on configuration from config.toml (defaults to docker)
 sandbox_service = create_sandbox_service()
 
+# Track the most recently initiated scan job ID for instant retrieval
+_latest_job_id = None
+
+def log_job_event(job_id: str, message: str):
+    """Appends a timestamped message to the job's unified process log."""
+    from datetime import datetime
+    data_root = os.environ.get("SCAN_DATA_ROOT", "/data")
+    log_path = os.path.join(data_root, job_id, "reports", "process.log")
+    try:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass # Best effort logging
+
 
 # ============================================================================
 # Sandbox CRUD Operations
@@ -201,7 +217,20 @@ async def create_scan_job(
         # Fallback: create an empty request object if parsing fails
         scan_request = ScanJobRequest()
 
-    job_id = str(uuid4())
+    # Check metadata for pre-generated job_id from gateway
+    metadata = {}
+    if scan_request and scan_request.metadata:
+        metadata = scan_request.metadata
+        
+    job_id = metadata.get("job_id", str(uuid4()))
+    metadata["job_id"] = job_id
+
+    # Update latest job ID globally for instant retrieval from other tabs
+    global _latest_job_id
+    _latest_job_id = job_id
+
+    log_job_event(job_id, f"[SERVER] Starting security scan job: {job_id}")
+
     # Base path for shared storage (mounted via PVC in Helm)
     data_root = os.environ.get("SCAN_DATA_ROOT", "/data")
     job_dir = os.path.join(data_root, job_id, "workspace")
@@ -231,6 +260,7 @@ async def create_scan_job(
         files_to_save[f"main.{ext}"] = body_str
 
     try:
+        log_job_event(job_id, f"[SERVER] Writing {len(files_to_save)} source file(s) to PVC workspace...")
         os.makedirs(job_dir, exist_ok=True)
         os.makedirs(reports_dir, exist_ok=True)
         
@@ -251,10 +281,6 @@ async def create_scan_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"code": "FILE_SYSTEM_ERROR", "message": f"Failed to write scan files: {str(e)}"}
         )
-
-    # Attach job_id to sandbox metadata so it can be tracked
-    metadata = scan_request.metadata if scan_request and scan_request.metadata else {}
-    metadata["job_id"] = job_id
 
     sandbox_req = CreateSandboxRequest(
         image=ImageSpec(uri="codeinterpreter:3.1.0"),
@@ -283,9 +309,11 @@ async def create_scan_job(
         metadata=metadata
     )
 
+    log_job_event(job_id, "[SERVER] Provisioning code-interpreter sandbox...")
     created_sandbox = sandbox_service.create_sandbox(sandbox_req)
     sandbox_id = created_sandbox.id
     
+    log_job_event(job_id, f"[SERVER] Sandbox created (ID: {sandbox_id}). Waiting for scan results...")
     report_path = os.path.join(reports_dir, "security_scan_report.json")
     timeout_seconds = sandbox_req.timeout if sandbox_req.timeout else 300
     deadline = asyncio.get_event_loop().time() + timeout_seconds
@@ -378,6 +406,75 @@ async def get_scan_source(job_id: str, file_path: str):
         )
         
     return FileResponse(full_path)
+
+
+@router.get("/scan-status/{job_id}", tags=["Security Scan Pipeline"])
+@router.get("/scan-status", tags=["Security Scan Pipeline"])
+async def get_scan_status(job_id: Optional[str] = None):
+    """
+    Retrieves the current sandbox status for a given scan job ID.
+    If job_id is omitted, retrieves the status of the most recently initiated job.
+    """
+    if not job_id:
+        if not _latest_job_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "NO_JOBS_FOUND", "message": "No scan jobs have been initiated yet in this session."}
+            )
+        job_id = _latest_job_id
+
+    request = ListSandboxesRequest(
+        filter=SandboxFilter(metadata={"job_id": job_id}),
+        pagination=PaginationRequest(page=1, pageSize=1)
+    )
+    res = sandbox_service.list_sandboxes(request)
+    
+    if not res.items:
+        return {"job_id": job_id, "status": "NOT_FOUND", "message": "No active sandbox found for this job ID. It may have been garbage collected, or never existed."}
+        
+    sandbox = res.items[0]
+    
+    # Try to fetch process logs if available
+    data_root = os.environ.get("SCAN_DATA_ROOT", "/data")
+    log_path = os.path.join(data_root, job_id, "reports", "process.log")
+    logs = ""
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r") as f:
+                logs = f.read()
+        except Exception:
+            logs = "Error reading process logs."
+
+    if logs:
+        return Response(content=logs, media_type="text/plain")
+
+    return {
+        "job_id": job_id,
+        "sandbox_id": sandbox.id,
+        "status": sandbox.status.state if sandbox.status else "Unknown"
+    }
+
+
+@router.get("/job_id", tags=["Security Scan Pipeline"])
+async def get_latest_job_id():
+    """
+    Retrieves the job_id of the most recently initiated scan job in the current session.
+    Useful when a /v1/scan-jobs request is blocking and you need the job_id from another context.
+    """
+    if not _latest_job_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NO_JOBS_FOUND", "message": "No scan jobs have been initiated yet in this session."}
+        )
+    return {"job_id": _latest_job_id}
+
+
+@router.get("/job_status", tags=["Security Scan Pipeline"])
+async def get_latest_job_status_alias():
+    """
+    Alias for /v1/scan-status to retrieve the latest job status.
+    """
+    return await get_scan_status()
 
 
 # Search endpoint
