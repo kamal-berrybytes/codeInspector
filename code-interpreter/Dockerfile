@@ -27,9 +27,15 @@ RUN set -eux; \
     which bandit; \
     which gitleaks; \
     which trivy; \
+    which kube-linter; \
+    which kubeconform; \
+    which kube-score; \
     # Full versions check
     semgrep --version; \
-    trivy --version
+    trivy --version; \
+    kube-linter version; \
+    kubeconform -v; \
+    kube-score version
 # ─────────────────────────────────────────────────────────────────────────────
 
 ARG TARGETARCH

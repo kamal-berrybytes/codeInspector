@@ -192,6 +192,21 @@ run_security_scans() {
     # Ensure global binary paths are at the front of the PATH
     export PATH="/usr/local/bin:/root/.local/bin:$PATH"
 
+    echo -n "Checking for scanners: semgrep, gitleaks, bandit, yamllint, trivy, kube-linter, kubeconform, kube-score... "
+    if ! command -v semgrep >/dev/null 2>&1 || \
+       ! command -v gitleaks >/dev/null 2>&1 || \
+       ! command -v bandit >/dev/null 2>&1 || \
+       ! command -v yamllint >/dev/null 2>&1 || \
+       ! command -v trivy >/dev/null 2>&1 || \
+       ! command -v kube-linter >/dev/null 2>&1 || \
+       ! command -v kubeconform >/dev/null 2>&1 || \
+       ! command -v kube-score >/dev/null 2>&1; then
+        echo " [MISSING] Some scanners are missing. Skipping automated scans."
+        echo "---------------------------------------------"
+        echo "============================================="
+        return 0
+    fi
+
     # Conditional trigger: Only scan if there are files in /workspace
     if [ ! "$(ls -A /workspace 2>/dev/null)" ]; then
         echo " [SKIP]    No files found in /workspace. Skipping automated scans."

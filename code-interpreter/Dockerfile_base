@@ -152,13 +152,58 @@ RUN set -eux; \
         | tar -xz -C /usr/local/bin trivy; \
     chmod 755 /usr/local/bin/trivy
 
+# kube-linter (static binary)
+RUN set -eux; \
+    KUBELINTER_VERSION="0.8.3"; \
+    ARCH_SUFFIX=""; \
+    case "${TARGETARCH}" in \
+      "amd64") ARCH_SUFFIX="" ;; \
+      "arm64") ARCH_SUFFIX="_arm64" ;; \
+      *) ARCH_SUFFIX="" ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/stackrox/kube-linter/releases/download/v${KUBELINTER_VERSION}/kube-linter-linux${ARCH_SUFFIX}.tar.gz" \
+        | tar -xz -C /usr/local/bin kube-linter; \
+    chmod 755 /usr/local/bin/kube-linter
+
+# kubeconform (static binary)
+RUN set -eux; \
+    KUBECONFORM_VERSION="0.7.0"; \
+    ARCH=""; \
+    case "${TARGETARCH}" in \
+      "amd64") ARCH="amd64" ;; \
+      "arm64") ARCH="arm64" ;; \
+      *) ARCH="amd64" ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-${ARCH}.tar.gz" \
+        | tar -xz -C /usr/local/bin kubeconform; \
+    chmod 755 /usr/local/bin/kubeconform
+
+# kube-score (static binary)
+RUN set -eux; \
+    KUBESCORE_VERSION="1.20.0"; \
+    ARCH=""; \
+    case "${TARGETARCH}" in \
+      "amd64") ARCH="amd64" ;; \
+      "arm64") ARCH="arm64" ;; \
+      *) ARCH="amd64" ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/zegl/kube-score/releases/download/v${KUBESCORE_VERSION}/kube-score_${KUBESCORE_VERSION}_linux_${ARCH}.tar.gz" \
+        | tar -xz -C /usr/local/bin kube-score; \
+    chmod 755 /usr/local/bin/kube-score
+
 # Verify tools are on the global PATH
 RUN set -eux; \
     semgrep --version; \
     yamllint --version; \
     bandit --version; \
     gitleaks version; \
-    trivy --version
+    trivy --version; \
+    kube-linter version; \
+    kubeconform -v; \
+    kube-score version
 
 # 9. Install kubectl
 RUN set -eux; \
