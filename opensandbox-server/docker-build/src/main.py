@@ -116,7 +116,7 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI application
 app = FastAPI(
-    title="OpenSandbox Lifecycle API",
+    title="z1Sandbox Lifecycle API",
     version="0.1.0",
     description="The Sandbox Lifecycle API coordinates how untrusted workloads are created, "
                 "executed, paused, resumed, and finally disposed.",

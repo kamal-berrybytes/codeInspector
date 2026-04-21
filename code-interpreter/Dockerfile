@@ -104,19 +104,19 @@ RUN set -euo pipefail \
 
 ##
 
-ARG JUPYTER_TOKEN=opensandboxcodeinterpreterjupyter
-ENV JUPYTER_HOST=http://127.0.0.1:44771 \
-    JUPYTER_PORT=44771 \
-    JUPYTER_TOKEN=${JUPYTER_TOKEN} \
-    PYTHON_VERSION=3.14 \
-    NODE_VERSION=22 \
-    GO_VERSION=1.25 \
-    JAVA_VERSION=21
+# ARG JUPYTER_TOKEN=opensandboxcodeinterpreterjupyter
+# ENV JUPYTER_HOST=http://127.0.0.1:44771 \
+#     JUPYTER_PORT=44771 \
+#     JUPYTER_TOKEN=${JUPYTER_TOKEN} \
+#     PYTHON_VERSION=3.14 \
+#     NODE_VERSION=22 \
+#     GO_VERSION=1.25 \
+#     JAVA_VERSION=21
 
 # Copy modularized application code and scripts
 COPY src/ /opt/opensandbox/src/
 COPY scripts/code-interpreter.sh /opt/opensandbox/code-interpreter.sh
-COPY scripts/jupyter_notebook_config.py /root/.jupyter/
+# COPY scripts/jupyter_notebook_config.py /root/.jupyter/
 
 RUN chmod +x /opt/opensandbox/code-interpreter.sh
 
