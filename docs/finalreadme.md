@@ -35,7 +35,7 @@ graph TD
     
     subgraph "Orchestration Layer"
         SAS -->|FastAPI| AS[API Server]
-        AS -->|Proxy| OSB_PROXY[/backend/opensandbox/*]
+        AS -->|Proxy| OSB_PROXY[/backend/z1sandbox/*]
     end
     
     subgraph "Execution Layer"
@@ -102,7 +102,7 @@ External applications (CI/CD pipelines, dashboards, bots) interact with CodeInsp
 import requests
 import time
 
-BASE_URL = "https://your-custom.ngrok-free.dev/backend/opensandbox"
+BASE_URL = "https://your-custom.ngrok-free.dev/backend/z1sandbox"
 HEADERS = {
     "Authorization": "Bearer YOUR_API_TOKEN",
     "Content-Type": "application/json"

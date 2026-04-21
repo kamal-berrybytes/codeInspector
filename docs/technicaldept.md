@@ -22,7 +22,7 @@ graph TD
     
     subgraph "Orchestration Layer (apiServer)"
         SAS -->|ClusterIP| AS[API Server - FastAPI]
-        AS -->|Backend Strategy| OSB_PROXY[/backend/opensandbox/*]
+        AS -->|Backend Strategy| OSB_PROXY[/backend/z1sandbox/*]
     end
     
     subgraph "Execution Management (opensandbox-server)"

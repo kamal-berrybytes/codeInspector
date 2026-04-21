@@ -72,7 +72,7 @@ A distributed sandbox system managed via Helm.
 2.  **Validation**: If `validate=true`, the API server performs a health check on the target backend (e.g., checking if Docker is running or if OpenSandbox is reachable).
 3.  **Hot Swap**: Upon success, the `AppState` is updated globally. All subsequent `/run` calls now use the new backend immediately without server restart.
 
-### 3. Transparent Proxying (`/backend/opensandbox/*`)
+### 3. Transparent Proxying (`/backend/z1sandbox/*`)
 1.  **Intercept**: The API server matches the dynamic route `/backend/{backend_name}/{proxy_path}`.
 2.  **Re-routing**: It strips the prefix and forwards the headers/body to the internal service URL (e.g., `http://opensandbox-server.opensandbox-system.svc.cluster.local`).
 3.  **Response Relay**: The response from the internal service is relayed back to the original client, making the API server act as a secure gateway.
