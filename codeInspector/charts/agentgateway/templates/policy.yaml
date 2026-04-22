@@ -29,7 +29,7 @@ spec:
         set:
           - name: "Authorization"
             value: >-
-              request.headers['cookie'].contains("inspector_auth=") ? "Bearer " + request.headers['cookie'].split("inspector_auth=")[1].split(";")[0] : ""
+              'authorization' in request.headers ? request.headers['authorization'] : ('cookie' in request.headers && request.headers['cookie'].contains("inspector_auth=") ? "Bearer " + request.headers['cookie'].split("inspector_auth=")[1].split(";")[0] : "")
     {{- else }}
     {}
     {{- end }}
@@ -63,5 +63,5 @@ spec:
         set:
           - name: "Authorization"
             value: >-
-              request.headers['cookie'].contains("inspector_auth=") ? "Bearer " + request.headers['cookie'].split("inspector_auth=")[1].split(";")[0] : ""
+              'authorization' in request.headers ? request.headers['authorization'] : ('cookie' in request.headers && request.headers['cookie'].contains("inspector_auth=") ? "Bearer " + request.headers['cookie'].split("inspector_auth=")[1].split(";")[0] : "")
 {{- end }}

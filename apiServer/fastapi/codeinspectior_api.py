@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status, Depends
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
 
@@ -87,8 +87,114 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def cookie_auth_redirect_middleware(request: Request, call_next):
+    if request.url.path in ["/docs", "/backend/z1sandbox/docs"]:
+        cookie_val = request.cookies.get("inspector_auth")
+        if not cookie_val:
+            return RedirectResponse(url="/dashboard/index.html", status_code=307)
+    return await call_next(request)
 
 
+# Cache for remote JWKS (Auth0)
+jwks_cache = {
+    "last_updated": 0,
+    "jwks": None
+}
+
+async def get_remote_jwks(url: str):
+    """
+    Fetches and caches the remote JWKS (e.g., from Auth0).
+    """
+    now = time.time()
+    if jwks_cache["jwks"] and (now - jwks_cache["last_updated"] < 3600):
+        return jwks_cache["jwks"]
+    
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        jwks_data = r.json()
+        jwks = jwt.PyJWKSet.from_dict(jwks_data)
+        jwks_cache["jwks"] = jwks
+        jwks_cache["last_updated"] = now
+        return jwks
+
+async def validate_token(request: Request):
+    """
+    Decodes and validates the RS256 JWT produced by the Edge Gateway's 
+    cookie transformation.
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    
+    token = auth_header.replace("Bearer ", "", 1)
+    conf = jwt_config()
+    import sys
+    print(f"[DEBUG SECURITY] Received raw token from Gateway: '{token}'")
+    sys.stdout.flush()
+    
+    try:
+        # 1. Get unverified info to determine issuer
+        unverified_payload = jwt.decode(token, options={"verify_signature": False})
+        issuer = unverified_payload.get("iss")
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid")
+        
+        if not kid:
+            raise HTTPException(status_code=401, detail="Missing 'kid' in token header")
+        
+        # 2. Determine which JWKS to use
+        if issuer and issuer.startswith("https://") and conf["auth0_domain"] and conf["auth0_domain"] in issuer:
+            # Remote Issuer (Auth0)
+            target_jwks = await get_remote_jwks(f"{issuer.rstrip('/')}/.well-known/jwks.json")
+            target_audience = conf["auth0_audience"]
+            target_issuer = issuer
+        else:
+            # Local Issuer
+            jwks_data = json.loads(conf["public_jwks"])
+            target_jwks = jwt.PyJWKSet.from_dict(jwks_data)
+            target_audience = "code-inspector-api"
+            target_issuer = conf["issuer"]
+        
+        # 3. Get matching key
+        signing_key = None
+        for key in target_jwks.keys:
+            if key.key_id == kid:
+                signing_key = key
+                break
+        
+        if not signing_key:
+            raise HTTPException(status_code=401, detail=f"No matching key found for kid: {kid}")
+            
+        # 4. Decode and verify signature
+        payload = jwt.decode(
+            token, 
+            signing_key.key, 
+            algorithms=[conf["algorithm"]],
+            audience=target_audience,
+            issuer=target_issuer
+        )
+        return payload
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError as e:
+        # Provide actionable feedback if the token is opaque or undefined
+        hint = "Ensure Auth0 is returning an RS256 JWT, not an opaque token. Check that the API Audience is registered."
+        if token == "undefined" or not token:
+            hint = "Token was passed as empty or undefined. Please re-login on the dashboard."
+        elif "." not in token:
+            hint = "Received an opaque token (missing JWT segments). Check Auth0 API Audience configuration."
+        
+        token_snippet = f"{token[:10]}..." if len(token) > 10 else token
+        raise HTTPException(
+            status_code=401, 
+            detail=f"Invalid token format ({str(e)}). Token snippet: '{token_snippet}'. {hint}"
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=401, detail=f"Authorization failed: {str(e)}")
 
 
 # ─────────────────────────────────────────────
@@ -154,17 +260,30 @@ async def custom_openapi_json():
     return JSONResponse(content=spec)
 
 
-async def validate_token(request: Request):
+# Cache for remote JWKS (Auth0)
+jwks_cache = {
+    "last_updated": 0,
+    "jwks": None
+}
+
+async def get_remote_jwks(url: str):
     """
-    Lightweight validator that checks for the presence of a 'Bearer' token 
-    produced by the Edge Gateway's cookie transformation.
+    Fetches and caches the remote JWKS (e.g., from Auth0).
     """
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=403, detail="Gateway authentication required")
+    now = time.time()
+    if jwks_cache["jwks"] and (now - jwks_cache["last_updated"] < 3600):
+        return jwks_cache["jwks"]
     
-    # We trust the Gateway's RS256 validation, but we ensure the token exists
-    return auth_header
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        jwks_data = r.json()
+        jwks = jwt.PyJWKSet.from_dict(jwks_data)
+        jwks_cache["jwks"] = jwks
+        jwks_cache["last_updated"] = now
+        return jwks
+
+
 
 
 @app.get("/health", response_model=StatusResponse, summary="Retrieve active connection tracking properties", tags=["System"])
@@ -176,7 +295,7 @@ def health():
     )
 
 
-@app.post("/run", response_model=RunResponse, summary="Dispatch synchronous script explicitly", tags=["System"], dependencies=[Depends(validate_token)])
+@app.post("/run", response_model=RunResponse, summary="Dispatch synchronous script explicitly", tags=["System"])
 def run_code(req: RunRequest):
     """Evaluates payload instructions passing securely to the configured backend."""
     return state.backend.run(req.code, req.language.value, req.timeout)
@@ -361,7 +480,7 @@ async def get_latest_job_status():
 # 6. API Key Generation & Gateway Sync
 # ─────────────────────────────────────────────
 
-@app.post("/v1/generate-api", response_model=GenerateAPIResponse, tags=["Security"])
+@app.post("/v1/generate-api", response_model=GenerateAPIResponse, tags=["Security"], dependencies=[Depends(validate_token)])
 async def generate_api(user_id: str = "default-user"):
     """
     Generates a secure JWT for multi-user authentication.
