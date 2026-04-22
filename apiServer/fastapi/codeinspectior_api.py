@@ -112,17 +112,33 @@ async def get_remote_jwks(url: str):
         jwks_cache["jwks"] = jwks
         jwks_cache["last_updated"] = now
         return jwks
-
 async def validate_token(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Decodes and validates the RS256 JWT using either the local public JWKS 
     or a remote OIDC provider (Auth0).
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    
+    # Fallback to custom header or cookie
+    if not token:
+        # 1. Check for custom X-Auth-Token header
+        x_token = request.headers.get("X-Auth-Token")
+        if x_token:
+            token = x_token.replace("Bearer ", "", 1) if x_token.startswith("Bearer ") else x_token
+        
+        # 2. Check for Direct Cookie (inspector_auth)
+        if not token:
+            cookie_token = request.cookies.get("inspector_auth")
+            if cookie_token:
+                # Reconstruct JWT dots from safe _DOT_ format
+                token = cookie_token.replace("_DOT_", ".")
+    
+    if not token:
         raise HTTPException(status_code=403, detail="Not authenticated")
     
     conf = jwt_config()
-    token = credentials.credentials
     
     try:
         # 1. Get unverified info to determine issuer

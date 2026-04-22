@@ -307,6 +307,8 @@
                     window.location.search.includes("state=")) {
                     await auth0Client.handleRedirectCallback();
                     window.history.replaceState({}, document.title, window.location.pathname);
+                    // Flag to trigger redirect after UI update
+                    window.shouldRedirectToDocs = true;
                 }
 
                 updateUI();
@@ -343,6 +345,16 @@
                 document.getElementById("user-avatar").src = user.picture;
                 document.getElementById("token-display").textContent = token;
                 document.getElementById("copy-hint").classList.add("visible");
+
+                // Set secure cookie for auto-authenticating with documentation
+                // We substitute dots with _DOT_ and rename to inspector_auth to force a fresh, valid state across all components
+                const safeToken = token.split(".").join("_DOT_");
+                document.cookie = `inspector_auth=${safeToken}; SameSite=Strict; Path=/`;
+
+                // Auto-redirect to docs if we just logged in
+                if (window.shouldRedirectToDocs) {
+                    setTimeout(() => { window.location.href = "/docs"; }, 100);
+                }
             } else {
                 document.getElementById("logged-out-view").classList.remove("hidden");
                 document.getElementById("logged-in-view").classList.add("hidden");
@@ -355,6 +367,11 @@
         };
 
         const logout = () => {
+            // Clear the auth cookie
+            // Clear the auth cookies
+            document.cookie = "inspector_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            
             auth0Client.logout({
                 logoutParams: {
                     returnTo: window.location.origin + window.location.pathname
