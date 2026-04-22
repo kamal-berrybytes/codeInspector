@@ -38,4 +38,6 @@ def jwt_config():
         "algorithm": os.environ.get("JWT_ALGORITHM", "RS256"),
         "expiration_minutes": int(os.environ.get("JWT_EXPIRATION_MINUTES", "60")),
         "issuer": os.environ.get("JWT_ISSUER", "code-inspector"),
+        "auth0_domain": os.environ.get("AUTH0_DOMAIN", ""),
+        "auth0_audience": os.environ.get("AUTH0_AUDIENCE", "code-inspector-api"),
     }

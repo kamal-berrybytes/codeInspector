@@ -41,6 +41,8 @@ apiServer:
     JWT_EXPIRATION_MINUTES: "60"
     JWT_ISSUER: "code-inspector"
     JWT_ALGORITHM: "RS256"
+    AUTH0_DOMAIN: "dev-axwc0ui527kw0c5d.us.auth0.com"
+    AUTH0_AUDIENCE: "https://code-inspector-api"
     JWT_PRIVATE_KEY: |
       -----BEGIN RSA PRIVATE KEY-----
       MIIEowIBAAKCAQEA7eXFpr2rANKszQYSKd+bDRy1+M0tsatbwpr0BGkMOsZMHRph

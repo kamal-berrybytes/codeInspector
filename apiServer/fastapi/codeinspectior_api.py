@@ -13,10 +13,12 @@ to communicate with the `opensandbox-server` kubernetes service.
 from __future__ import annotations
 
 import os
+import time
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status, Depends
+from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -87,11 +89,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Static Files Dashboard ──# ── Static Files Dashboard ──
+app.mount("/dashboard", StaticFiles(directory="dashboard"), name="dashboard")
+app.mount("/dashboard", StaticFiles(directory="dashboard"), name="dashboard")
+
 security = HTTPBearer(auto_error=False)
 
-def validate_token(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
+# Cache for remote JWKS (Auth0)
+jwks_cache = {
+    "last_updated": 0,
+    "jwks": None
+}
+
+async def get_remote_jwks(url: str):
     """
-    Decodes and validates the RS256 JWT using the public JWKS.
+    Fetches and caches the remote JWKS (e.g., from Auth0).
+    """
+    now = time.time()
+    if jwks_cache["jwks"] and (now - jwks_cache["last_updated"] < 3600):
+        return jwks_cache["jwks"]
+    
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        jwks_data = r.json()
+        jwks = jwt.PyJWKSet.from_dict(jwks_data)
+        jwks_cache["jwks"] = jwks
+        jwks_cache["last_updated"] = now
+        return jwks
+
+async def validate_token(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Decodes and validates the RS256 JWT using either the local public JWKS 
+    or a remote OIDC provider (Auth0).
     """
     if not credentials:
         raise HTTPException(status_code=403, detail="Not authenticated")
@@ -100,42 +130,62 @@ def validate_token(request: Request, credentials: HTTPAuthorizationCredentials =
     token = credentials.credentials
     
     try:
-        # 1. Get kid from header
+        # 1. Get unverified info to determine issuer
+        unverified_payload = jwt.decode(token, options={"verify_signature": False})
+        issuer = unverified_payload.get("iss")
         header = jwt.get_unverified_header(token)
         kid = header.get("kid")
+        
         if not kid:
             raise HTTPException(status_code=401, detail="Missing 'kid' in token header")
         
-        # 2. Load Public JWKS
-        jwks_data = json.loads(conf["public_jwks"])
-        jwks = jwt.PyJWKSet.from_dict(jwks_data)
+        conf = jwt_config()
+        
+        # 2. Determine which JWKS to use
+        if issuer and issuer.startswith("https://") and conf["auth0_domain"] and conf["auth0_domain"] in issuer:
+            # Remote Issuer (Auth0)
+            target_jwks = await get_remote_jwks(f"{issuer.rstrip('/')}/.well-known/jwks.json")
+            target_audience = conf["auth0_audience"]
+            target_issuer = issuer
+        else:
+            # Local Issuer
+            jwks_data = json.loads(conf["public_jwks"])
+            target_jwks = jwt.PyJWKSet.from_dict(jwks_data)
+            target_audience = "code-inspector-api"
+            target_issuer = conf["issuer"]
         
         # 3. Get matching key
         signing_key = None
-        for key in jwks.keys:
+        for key in target_jwks.keys:
             if key.key_id == kid:
                 signing_key = key
                 break
         
         if not signing_key:
-            raise HTTPException(status_code=401, detail="No matching key found in JWKS")
+            raise HTTPException(status_code=401, detail=f"No matching key found in JWKS for kid: {kid}")
             
         # 4. Decode and verify
+        print(f"[debug] Validating token for issuer: {target_issuer}, audience: {target_audience}, kid: {kid}")
         payload = jwt.decode(
             token, 
             signing_key.key, 
             algorithms=[conf["algorithm"]],
-            audience="code-inspector-api",
-            issuer=conf["issuer"]
+            audience=target_audience,
+            issuer=target_issuer
         )
+        print(f"[debug] Token validated successfully for sub: {payload.get('sub')}")
         return payload
         
     except jwt.ExpiredSignatureError:
+        print("[debug] Token validation failed: ExpiredSignatureError")
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
+        print(f"[debug] Token validation failed: InvalidTokenError: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Authorization failed")
+        print(f"[debug] Token validation failed: Unexpected error: {str(e)}")
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=401, detail=f"Authorization failed: {str(e)}")
 
 
 # ─────────────────────────────────────────────
