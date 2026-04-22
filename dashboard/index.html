@@ -347,9 +347,8 @@
                 document.getElementById("copy-hint").classList.add("visible");
 
                 // Set secure cookie for auto-authenticating with documentation
-                // We substitute dots with _DOT_ and rename to inspector_auth to force a fresh, valid state across all components
-                const safeToken = token.split(".").join("_DOT_");
-                document.cookie = `inspector_auth=${safeToken}; SameSite=Strict; Path=/`;
+                // We use the standard raw token; AgentGateway will parse this directly
+                document.cookie = `inspector_auth=${token}; SameSite=Strict; Path=/`;
 
                 // Auto-redirect to docs if we just logged in
                 if (window.shouldRedirectToDocs) {
