@@ -19,8 +19,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status, Depends
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
 
@@ -70,13 +69,13 @@ async def lifespan(app: FastAPI):
     print("[shutdown] Ceasing operations successfully...")
 
 
-security = HTTPBearer()
+
 
 app = FastAPI(
     title="CodeInspector API Manager",
     description="A centralized proxy relaying connections mapping standard interaction seamlessly to the underlying actual code-evaluation clusters locally natively successfully.",
     version="2.1.0",
-    docs_url="/docs",
+    docs_url=None, # Overriding with custom route below
     lifespan=lifespan,
 )
 
@@ -88,120 +87,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-security = HTTPBearer(auto_error=False)
 
-# Cache for remote JWKS (Auth0)
-jwks_cache = {
-    "last_updated": 0,
-    "jwks": None
-}
 
-async def get_remote_jwks(url: str):
-    """
-    Fetches and caches the remote JWKS (e.g., from Auth0).
-    """
-    now = time.time()
-    if jwks_cache["jwks"] and (now - jwks_cache["last_updated"] < 3600):
-        return jwks_cache["jwks"]
-    
-    async with httpx.AsyncClient() as client:
-        r = await client.get(url)
-        r.raise_for_status()
-        jwks_data = r.json()
-        jwks = jwt.PyJWKSet.from_dict(jwks_data)
-        jwks_cache["jwks"] = jwks
-        jwks_cache["last_updated"] = now
-        return jwks
-async def validate_token(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Decodes and validates the RS256 JWT using either the local public JWKS 
-    or a remote OIDC provider (Auth0).
-    """
-    token = None
-    if credentials:
-        token = credentials.credentials
-    
-    # Fallback to custom header or cookie
-    if not token:
-        # 1. Check for custom X-Auth-Token header
-        x_token = request.headers.get("X-Auth-Token")
-        if x_token:
-            token = x_token.replace("Bearer ", "", 1) if x_token.startswith("Bearer ") else x_token
-        
-        # 2. Check for Direct Cookie (inspector_auth)
-        if not token:
-            cookie_token = request.cookies.get("inspector_auth")
-            if cookie_token:
-                # Reconstruct JWT dots from safe _DOT_ format
-                token = cookie_token.replace("_DOT_", ".")
-    
-    if not token:
-        raise HTTPException(status_code=403, detail="Not authenticated")
-    
-    conf = jwt_config()
-    
-    try:
-        # 1. Get unverified info to determine issuer
-        unverified_payload = jwt.decode(token, options={"verify_signature": False})
-        issuer = unverified_payload.get("iss")
-        header = jwt.get_unverified_header(token)
-        kid = header.get("kid")
-        
-        if not kid:
-            raise HTTPException(status_code=401, detail="Missing 'kid' in token header")
-        
-        conf = jwt_config()
-        
-        # 2. Determine which JWKS to use
-        if issuer and issuer.startswith("https://") and conf["auth0_domain"] and conf["auth0_domain"] in issuer:
-            # Remote Issuer (Auth0)
-            target_jwks = await get_remote_jwks(f"{issuer.rstrip('/')}/.well-known/jwks.json")
-            target_audience = conf["auth0_audience"]
-            target_issuer = issuer
-        else:
-            # Local Issuer
-            jwks_data = json.loads(conf["public_jwks"])
-            target_jwks = jwt.PyJWKSet.from_dict(jwks_data)
-            target_audience = "code-inspector-api"
-            target_issuer = conf["issuer"]
-        
-        # 3. Get matching key
-        signing_key = None
-        for key in target_jwks.keys:
-            if key.key_id == kid:
-                signing_key = key
-                break
-        
-        if not signing_key:
-            raise HTTPException(status_code=401, detail=f"No matching key found in JWKS for kid: {kid}")
-            
-        # 4. Decode and verify
-        print(f"[debug] Validating token for issuer: {target_issuer}, audience: {target_audience}, kid: {kid}")
-        payload = jwt.decode(
-            token, 
-            signing_key.key, 
-            algorithms=[conf["algorithm"]],
-            audience=target_audience,
-            issuer=target_issuer
-        )
-        print(f"[debug] Token validated successfully for sub: {payload.get('sub')}")
-        return payload
-        
-    except jwt.ExpiredSignatureError:
-        print("[debug] Token validation failed: ExpiredSignatureError")
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError as e:
-        print(f"[debug] Token validation failed: InvalidTokenError: {str(e)}")
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-    except Exception as e:
-        print(f"[debug] Token validation failed: Unexpected error: {str(e)}")
-        if isinstance(e, HTTPException): raise e
-        raise HTTPException(status_code=401, detail=f"Authorization failed: {str(e)}")
 
 
 # ─────────────────────────────────────────────
-# 3. Global Base Operations
+# 3. Global Base Operations & Custom Docs
 # ─────────────────────────────────────────────
+
+def render_swagger_ui(openapi_url: str, title: str):
+    """
+    Manually renders Swagger UI HTML with a raw JS requestInterceptor 
+    to enable automatic cookie forwarding (withCredentials).
+    """
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <link type="text/css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+    <title>{title}</title>
+    </head>
+    <body>
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        const ui = SwaggerUIBundle({{
+            url: '{openapi_url}',
+            dom_id: '#swagger-ui',
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIBundle.SwaggerUIStandalonePreset
+            ],
+            layout: "BaseLayout",
+            deepLinking: true,
+            displayOperationId: true,
+            persistAuthorization: true,
+            requestInterceptor: (req) => {{
+                req.credentials = 'include';
+                return req;
+            }}
+        }});
+    </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return render_swagger_ui(app.openapi_url, app.title + " - Docs")
+
+@app.get("/openapi.json", include_in_schema=False)
+async def custom_openapi_json():
+    """
+    Patches the global OpenAPI spec to define the Cookies as the security scheme.
+    """
+    spec = app.openapi()
+    spec.setdefault("components", {})
+    spec["components"].setdefault("securitySchemes", {})
+    spec["components"]["securitySchemes"]["CookieAuth"] = {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "inspector_auth",
+    }
+    spec["security"] = [{"CookieAuth": []}]
+    return JSONResponse(content=spec)
+
+
+async def validate_token(request: Request):
+    """
+    Lightweight validator that checks for the presence of a 'Bearer' token 
+    produced by the Edge Gateway's cookie transformation.
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=403, detail="Gateway authentication required")
+    
+    # We trust the Gateway's RS256 validation, but we ensure the token exists
+    return auth_header
+
 
 @app.get("/health", response_model=StatusResponse, summary="Retrieve active connection tracking properties", tags=["System"])
 def health():
@@ -224,13 +188,10 @@ def run_code(req: RunRequest):
 
 @app.get("/backend/z1sandbox/docs", include_in_schema=False)
 async def get_backend_docs():
-    """Renders actual upstream OpenSandbox Swagger API."""
-    return get_swagger_ui_html(
-        openapi_url="/backend/z1sandbox/openapi.json",
-        title="OpenSandbox — Remote API Docs",
-        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
-        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
-    )
+    """
+    Renders actual upstream OpenSandbox Swagger API with custom authentication logic.
+    """
+    return render_swagger_ui("/backend/z1sandbox/openapi.json", "OpenSandbox — Remote API Docs")
 
 
 @app.get("/backend/z1sandbox/openapi.json", include_in_schema=False)
@@ -247,12 +208,12 @@ async def get_backend_openapi_spec():
                     spec["servers"] = [{"url": "/backend/z1sandbox"}]
                     spec.setdefault("components", {})
                     spec["components"].setdefault("securitySchemes", {})
-                    spec["components"]["securitySchemes"]["BearerAuth"] = {
-                        "type": "http",
-                        "scheme": "bearer",
-                        "bearerFormat": "JWT",
+                    spec["components"]["securitySchemes"]["CookieAuth"] = {
+                        "type": "apiKey",
+                        "in": "cookie",
+                        "name": "inspector_auth",
                     }
-                    spec["security"] = [{"BearerAuth": []}]
+                    spec["security"] = [{"CookieAuth": []}]
                     return JSONResponse(content=spec)
         except Exception:
             continue
@@ -375,7 +336,7 @@ async def get_scan_status(job_id: str):
     return state.backend.get_scan_status(job_id)
 
 
-@app.get("/v1/job-id", tags=["Security Scan Pipeline"])
+@app.get("/v1/job-id", tags=["Security Scan Pipeline"], dependencies=[Depends(validate_token)])
 async def get_latest_job_id():
     """
     Retrieves the job_id of the most recently initiated scan job in the current session.
@@ -386,7 +347,7 @@ async def get_latest_job_id():
     return {"job_id": state.latest_job_id}
 
 
-@app.get("/v1/job-status", tags=["Security Scan Pipeline"])
+@app.get("/v1/job-status", tags=["Security Scan Pipeline"], dependencies=[Depends(validate_token)])
 async def get_latest_job_status():
     """
     Retrieves the status of the most recently initiated scan job in the current session.
