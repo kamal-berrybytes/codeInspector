@@ -94,6 +94,7 @@ class ScanJobResponse(BaseModel):
 class GenerateAPIResponse(BaseModel):
     """Response returned upon successfully generating a new API key."""
     api_key: str
+    api_key_id: str
     status: str
 
 

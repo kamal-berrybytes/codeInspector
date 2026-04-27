@@ -219,23 +219,34 @@ async def validate_token(request: Request):
     Decodes and validates the RS256 JWT produced by the Edge Gateway's 
     cookie transformation.
     """
-    # Case-insensitive lookup for the Authorization header
+    # 1. Extraction: Priorities = Authorization Header -> Execution Cookie -> Auth0 Cookie
     auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
-    
-    # Fallback: Check for the Auth0 cookie if header is missing
-    # This acts as the "Security Bridge" for browser clients where Gateway transformation is not available
-    if not auth_header:
-        cookie_token = request.cookies.get("inspector_auth")
-        if cookie_token:
-            auth_header = f"Bearer {cookie_token}"
+    raw_token = None
+    source = "header"
 
-    if not auth_header or not auth_header.startswith("Bearer "):
-        print(f"[DEBUG SECURITY] ERROR: Missing or invalid Authorization header/cookie. Headers found: {list(request.headers.keys())}")
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header/cookie")
+    if auth_header:
+        # Accept both "Bearer <token>" and raw "<token>"
+        raw_token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    else:
+        # Fallback 1: Dedicated Execution Token (Developer API Keys)
+        # Fallback 2: Management Session (Auth0)
+        exec_cookie = request.cookies.get("execution_token")
+        auth0_cookie = request.cookies.get("inspector_auth")
+        
+        if exec_cookie:
+            raw_token = exec_cookie
+            source = "execution_cookie"
+        elif auth0_cookie:
+            raw_token = auth0_cookie
+            source = "management_cookie"
+
+    if not raw_token:
+        print(f"[DEBUG SECURITY] ERROR: No credentials found in Headers or Cookies.")
+        raise HTTPException(status_code=401, detail="Authentication required (API Key or Session missing)")
     
-    token = auth_header.replace("Bearer ", "", 1)
+    token = raw_token
     conf = jwt_config()
-    print(f"[DEBUG SECURITY] Received raw token from Gateway: '{token}'")
+    print(f"[DEBUG SECURITY] Validating {source} token: {token[:10]}...{token[-10:]}")
     
     try:
         # 1. Get unverified info to determine issuer
@@ -269,10 +280,6 @@ async def validate_token(request: Request):
                 signing_key = key
                 break
         
-        if not signing_key:
-            print(f"[DEBUG SECURITY] ERROR: No matching key found for kid '{kid}' in JWKS. Available kids: {[k.key_id for k in target_jwks.keys]}")
-            raise HTTPException(status_code=401, detail=f"No matching key found for kid: {kid}")
-            
         # 4. Decode and verify signature
         try:
             payload = jwt.decode(
@@ -286,90 +293,89 @@ async def validate_token(request: Request):
             print(f"[DEBUG SECURITY] JWT Decode ERROR: {str(e)}")
             raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
         
-        # 5. Hardened Enforcement: Distributed Registry Verification (Redis/DB)
-        # We use an "Allowlist" model: Token MUST exist in the shared registry to be valid.
+        # 5. --- IDENTITY BRIDGE ---
+        # If this is an Auth0 token (browser session), map it to the user's REAL Developer Key in Postgres
         jti = payload.get("jti")
-        print(f"[DEBUG SECURITY] Token JTI: {jti}, Issuer: {issuer}, Internal Issuer: {conf['issuer']}")
-        if issuer == conf["issuer"]:
-            if not jti:
-                raise HTTPException(status_code=401, detail="Internal token missing required JTI claim")
-                
-            is_valid = False
-            
-            # Step A: High-speed check via Redis (hits all pods instantly)
-            if state.use_redis:
-                is_valid = state.redis_client.sismember("active_api_keys", jti)
-                print(f"[DEBUG SECURITY] Redis Allowlist Check for JTI {jti}: {'VALID' if is_valid else 'UNKNOWN/REVOKED'}")
-            
-            # Step B: Fallback/Integrity check via Central Database
-            if not is_valid:
-                conn = state.get_db_conn()
-                cursor = conn.cursor()
-                query = "SELECT is_revoked FROM api_keys WHERE id = %s" if state.use_postgres else "SELECT is_revoked FROM api_keys WHERE id = ?"
-                cursor.execute(query, (jti,))
-                row = cursor.fetchone()
-                conn.close()
-                
-                if not row:
-                    print(f"[DEBUG SECURITY] REJECTION: Key {jti} does not exist in central database")
-                    raise HTTPException(status_code=401, detail="API Key has been deactivated or deleted")
-                
-                if row[0] == 1:
-                    print(f"[DEBUG SECURITY] REJECTION: Key {jti} is explicitly revoked in central database")
-                    raise HTTPException(status_code=401, detail="API Key has been revoked")
-                
-                # If it's in DB but not Redis, re-sync it (self-healing)
-                if state.use_redis:
-                    state.redis_client.sadd("active_api_keys", jti)
-                is_valid = True
-            
-            print(f"[DEBUG SECURITY] SUCCESS: Key {jti} verified against distributed registry")
-            
-            # Update last_used_at in background
-            asyncio.create_task(update_last_used(jti))
-
-        # 6. Hardened Enforcement: Scoping & Session Alignment
-        if request.url.path.startswith("/backend/z1sandbox"):
-            # A) Scope Check
-            token_backend = payload.get("backend")
-            if issuer == conf["issuer"] and token_backend and token_backend not in ["Z1_SANDBOX", "GENERAL"]:
-                raise HTTPException(status_code=403, detail="API Key lacks permission for Z1_SANDBOX backend")
-            
-            # B) Session Alignment Check
-            auth_header_raw = request.headers.get("authorization") or request.headers.get("Authorization")
-            cookie_token = request.cookies.get("inspector_auth")
-            if auth_header_raw and cookie_token:
-                apikey_sub = payload.get("sub")
-                try:
-                    cookie_payload = jwt.decode(cookie_token, options={"verify_signature": False})
-                    cookie_sub = cookie_payload.get("sub")
-                    if cookie_sub and cookie_sub != apikey_sub:
-                        raise HTTPException(status_code=403, detail="Session mismatch: The provided API Key does not belong to the current Auth0 session.")
-                except Exception:
-                    pass
-
-        # 7. Disallow Auth0 token from executing workloads
+        user_id = payload.get("sub")
+        
+        # --- IDENTITY BRIDGE ---
+        is_management_route = any(request.url.path.startswith(p) for p in ["/v1/api-keys", "/v1/generate-api", "/v1/revoke-api-key"])
+        
         if issuer != conf["issuer"]:
-            # This is a browser session/Auth0 token.
-            path = request.url.path
-            allowed_auth0_paths = [
-                "/v1/api-keys",
-                "/v1/generate-api",
-                "/backend/z1sandbox/docs",
-                "/backend/z1sandbox/openapi.json",
-                "/backend/opensandbox/docs",
-                "/backend/opensandbox/openapi.json"
-            ]
+            if is_management_route:
+                print(f"[Security] Allowing management operation for Auth0 user: {user_id}")
+                return payload
             
-            is_allowed = False
-            for p in allowed_auth0_paths:
-                if path == p or path.startswith(p + "/"):
-                    is_allowed = True
-                    break
-                    
-            if not is_allowed:
-                print(f"[DEBUG SECURITY] REJECTION: Auth0 session {issuer} attempted to access execution route {path}")
-                raise HTTPException(status_code=403, detail="Active Auth0 dashboard sessions cannot be used for direct backend execution. Please generate and supply a developer API Key in the Authorization headers.")
+            print(f"[Identity Bridge] Mapping Auth0 user {user_id} to their primary Developer API Key...")
+            conn = state.get_db_conn()
+            cursor = conn.cursor()
+            query = """
+                SELECT id FROM api_keys 
+                WHERE user_id = %s AND is_revoked = 0 
+                ORDER BY created_at DESC LIMIT 1
+            """ if state.use_postgres else "SELECT id FROM api_keys WHERE user_id = ? AND is_revoked = 0 ORDER BY created_at DESC LIMIT 1"
+            cursor.execute(query, (user_id,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row:
+                jti = row[0]
+                print(f"[Identity Bridge] SUCCESS: Auth0 session now acting as Developer Key ID: {jti}")
+            else:
+                print(f"[Identity Bridge] WARNING: No Developer Key found for {user_id}")
+                raise HTTPException(status_code=403, detail="No active Developer API Key found. Please create your FIRST API Key in this tab to enable sandbox operations.")
+
+        if not jti:
+            raise HTTPException(status_code=401, detail="Invalid token: Missing JTI/Key ID")
+
+        # --- DISTRIBUTED VALIDATION (Redis -> Postgres) ---
+        is_valid = False
+            
+        # Step A: High-speed check via Redis (hits all pods instantly)
+        if state.use_redis:
+            is_valid = state.redis_client.sismember("active_api_keys", jti)
+        
+        # Step B: Fallback/Integrity check via Central Database
+        if not is_valid:
+            conn = state.get_db_conn()
+            cursor = conn.cursor()
+            query = "SELECT is_revoked FROM api_keys WHERE id = %s" if state.use_postgres else "SELECT is_revoked FROM api_keys WHERE id = ?"
+            cursor.execute(query, (jti,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                raise HTTPException(status_code=401, detail="API Key has been deactivated or deleted")
+            
+            if row[0] == 1:
+                raise HTTPException(status_code=401, detail="API Key has been revoked")
+            
+            # Self-healing Redis cache
+            if state.use_redis:
+                state.redis_client.sadd("active_api_keys", jti)
+            is_valid = True
+        
+        print(f"[DEBUG SECURITY] SUCCESS: Session Verified (Key ID: {jti})")
+        
+        # Update last_used_at in background
+        asyncio.create_task(update_last_used(jti))
+
+        # 6. Session Alignment Check (Anti-CSRF)
+        # Ensure that if both a header and a cookie are present, they are consistent
+        auth_header_raw = request.headers.get("authorization") or request.headers.get("Authorization")
+        cookie_token = request.cookies.get("execution_token") or request.cookies.get("inspector_auth")
+        
+        if auth_header_raw and cookie_token:
+            apikey_sub = payload.get("sub")
+            try:
+                cookie_payload = jwt.decode(cookie_token, options={"verify_signature": False})
+                cookie_sub = cookie_payload.get("sub")
+                if cookie_sub and cookie_sub != apikey_sub:
+                    # Special case: allow if the session is mapped via Identity Bridge
+                    if issuer != conf["issuer"]: pass 
+                    else: raise HTTPException(status_code=403, detail="Session mismatch detectd.")
+            except Exception:
+                pass
 
         return payload
         
@@ -443,6 +449,41 @@ def render_swagger_ui(openapi_url: str, title: str):
                 return req;
             }}
         }});
+
+        // AUTO-AUTHORIZATION: Read the developer key from the session cookie
+        const getCookie = (name) => {{
+            const value = `; ${{document.cookie}}`;
+            const parts = value.split(`; ${{name}}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }};
+
+        // Robust Authorization Injector
+        const autoAuthorize = () => {{
+            const token = getCookie('execution_token') || getCookie('inspector_auth');
+            if (token && ui && ui.authActions) {{
+                const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${{token}}`;
+                
+                // Clear any old auth and apply the new one
+                ui.authActions.authorize({{
+                    "BearerAuth": {{
+                        name: "BearerAuth",
+                        schema: {{
+                            type: "apiKey",
+                            in: "header",
+                            name: "Authorization"
+                        }},
+                        value: formattedToken
+                    }}
+                }});
+                console.log("[Zero-Touch] Successfully bound Developer Key to Swagger session.");
+            }} else {{
+                console.warn("[Zero-Touch] Waiting for UI or Cookie... Retrying in 1s");
+                setTimeout(autoAuthorize, 1000);
+            }}
+        }};
+
+        // Initial trigger
+        setTimeout(autoAuthorize, 1000);
     </script>
     </body>
     </html>
@@ -543,9 +584,10 @@ async def get_backend_openapi_spec():
                     spec.setdefault("components", {})
                     spec["components"].setdefault("securitySchemes", {})
                     spec["components"]["securitySchemes"]["BearerAuth"] = {
-                        "type": "http",
-                        "scheme": "bearer",
-                        "bearerFormat": "JWT"
+                        "type": "apiKey",
+                        "name": "Authorization",
+                        "in": "header",
+                        "description": "Automatically populated via session binding."
                     }
                     spec["security"] = [{"BearerAuth": []}]
                     return JSONResponse(content=spec)
@@ -733,6 +775,7 @@ async def generate_api(user_id: str = "default-user"):
         
         return GenerateAPIResponse(
             api_key=token,
+            api_key_id=payload.get("jti", "legacy"),
             status=f"JWT generated successfully for {user_id}. Valid for {expires_delta} minutes."
         )
         
@@ -833,6 +876,7 @@ async def create_api_key(req: APIKeyCreateRequest, payload: dict = Depends(valid
 
     return GenerateAPIResponse(
         api_key=token,
+        api_key_id=jti,
         status=status_msg
     )
 

@@ -509,7 +509,7 @@
                 <div class="keys-grid">
                     <div class="key-card animate-fade-in hover-scale"
                         style="cursor: pointer; transition: transform 0.2s;"
-                        onclick="window.open('https://dipper-shun-glowing.ngrok-free.dev/backend/z1sandbox/docs', '_blank')">
+                        onclick="bindAndNavigate('Z1_SANDBOX', 'https://dipper-shun-glowing.ngrok-free.dev/backend/z1sandbox/docs')">
                         <div class="key-info">
                             <div style="display: flex; align-items: flex-start; gap: 1rem;">
                                 <div
@@ -613,6 +613,13 @@
 
     <script>
         let auth0Client = null;
+        let backendKeys = {}; // Global map: Backend name -> Active Developer Key
+
+        const getCookie = (name) => {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        };
 
         // AUTH0 CONFIGURATION (Placeholders)
         const config = {
@@ -681,10 +688,10 @@
 
                 document.getElementById("user-avatar").src = user.picture;
 
-                // Fetch existing keys
-                fetchAPIKeys();
+                // 1. Fetch keys to find the best Developer Key for each backend
+                await fetchAPIKeys();
 
-                // Set secure cookie for auto-authenticating with documentation
+                // 2. Set default management cookie (Auth0)
                 document.cookie = `inspector_auth=${token}; SameSite=Strict; Path=/`;
 
                 setupSidebar();
@@ -702,10 +709,46 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await response.json();
+                
+                // POPULATE BACKEND KEY MAP
+                if (data.keys) {
+                    data.keys.forEach(key => {
+                        if (!key.is_revoked) {
+                            // 1. Memory binding
+                            const savedKey = localStorage.getItem(`bound_key_${key.id}`);
+                            if (savedKey) {
+                                backendKeys[key.backend] = savedKey;
+                                
+                                // 2. IMMEDIATE AUTO-BIND (Zero-Touch)
+                                // If this is our primary backend, set the cookie now!
+                                if (key.backend === 'Z1_SANDBOX' && !getCookie('execution_token')) {
+                                    document.cookie = `execution_token=${savedKey}; SameSite=Strict; Path=/`;
+                                    console.log(`[Zero-Touch] Automatically synchronized execution token for ${key.backend}`);
+                                }
+                            }
+                        }
+                    });
+                }
+                
                 renderKeys(data.keys);
             } catch (err) {
                 console.error("Failed to fetch keys:", err);
             }
+        };
+
+        const bindAndNavigate = (backend, url) => {
+            const key = backendKeys[backend];
+            if (!key) {
+                alert(`No API Key found for ${backend}. Please create one in the 'APIs' tab first to enable secure execution.`);
+                showAPIPage();
+                return;
+            }
+            
+            // Set the EXECUTION cookie (Use the Developer Key instead of Auth0)
+            document.cookie = `execution_token=${key}; SameSite=Strict; Path=/`;
+            console.log(`[Security] Session bound to Developer Key for ${backend}`);
+            
+            window.open(url, '_blank');
         };
 
         const renderKeys = (keys) => {
@@ -784,13 +827,21 @@
                     throw new Error("Server did not return a valid API key.");
                 }
 
+                // Refresh list
+                await fetchAPIKeys();
+
+                // AUTOMATIC BINDING: Store in localStorage                // 1. Persist for session recovery
+                localStorage.setItem(`bound_key_${data.api_key_id}`, data.api_key);
+                backendKeys[backend] = data.api_key;
+
+                // 2. INSTANT BIND: Tell the Gateway/Backend to use this new key for docs immediately
+                document.cookie = `execution_token=${data.api_key}; SameSite=Strict; Path=/`;
+                console.log(`[Zero-Touch] Session instantly synchronized with new key for ${backend}`);
+                
                 // Show reveal modal
                 document.getElementById("create-modal").classList.add("hidden");
                 document.getElementById("reveal-modal").classList.remove("hidden");
                 document.getElementById("new-key-display").textContent = data.api_key;
-
-                // Refresh list
-                fetchAPIKeys();
             } catch (err) {
                 alert("Creation Failed: " + err.message);
                 console.error(err);
@@ -823,9 +874,9 @@
         };
 
         const logout = () => {
-            // Clear the auth cookie
-            // Clear the auth cookies
+            // Clear all auth cookies
             document.cookie = "inspector_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            document.cookie = "execution_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
             document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 
             auth0Client.logout({
