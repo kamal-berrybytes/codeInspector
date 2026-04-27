@@ -24,7 +24,7 @@ The primary technical challenge was supporting **Swagger UI** and browser-based 
 #### A. Token Ingestion (The Browser)
 When a user logs in via the dashboard, the Auth0 SDK retrieves a JWT scoped to `https://code-inspector-api`. This token is stored in an `HttpOnly` (or secure JS-readable) cookie named `inspector_auth`.
 
-#### B. Edge Transformation (Envoy CEL)
+#### B. Edge Transformation (Envoy Common Expression Language (CEL))
 The **AgentGateway** (Envoy) is configured with an `HTTPRoute` filter that executes a CEL script on every incoming request. This script handles the conversion logic at the edge, before the request ever reaches the backend.
 
 **The Transformation Script:**

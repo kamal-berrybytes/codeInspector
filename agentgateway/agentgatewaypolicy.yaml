@@ -10,6 +10,7 @@ spec:
       name: agentgateway-route
   traffic:
     jwtAuthentication:
+      forwardOriginalToken: true
       providers:
         - issuer: "code-inspector"
           audiences:

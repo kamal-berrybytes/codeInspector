@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodeInspector | Developer Dashboard</title>
+    <title>01 Sandbox | Developer Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -214,12 +214,206 @@
         .animate-fade-in {
             animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+
+        /* Management Styles */
+        .keys-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+            text-align: left;
+        }
+
+        .key-card {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border);
+            padding: 1.25rem;
+            border-radius: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .key-card:hover {
+            border-color: var(--primary);
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        .key-info h4 {
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .key-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-Z1_SANDBOX {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+        }
+
+        /* Dashboard Layout */
+        .dashboard-layout {
+            display: flex;
+            width: 100%;
+            flex-grow: 1;
+            background: var(--bg);
+        }
+
+        .sidebar {
+            width: 260px;
+            background: rgba(15, 23, 42, 0.95);
+            border-right: 1px solid var(--border);
+            padding: 2rem 0;
+            display: flex;
+            flex-direction: column;
+            min-height: calc(100vh - 80px);
+        }
+
+        .sidebar-category {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--text-dim);
+            padding: 1.5rem 1.5rem 0.5rem 1.5rem;
+            letter-spacing: 0.5px;
+        }
+
+        .menu-item {
+            padding: 0.75rem 1.5rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+        }
+
+        .menu-item.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            border-left-color: var(--primary);
+            font-weight: 600;
+        }
+
+        .menu-icon {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            padding: 3rem 4rem;
+            background: var(--bg);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            padding: 2.5rem;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+        }
+
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 
 <body>
     <header>
-        <div class="logo">CodeInspector</div>
+        <div class="logo">01 Sandbox</div>
         <div id="user-nav" class="hidden">
             <div class="user-profile">
                 <img id="user-avatar" class="avatar" src="" alt="Avatar">
@@ -228,7 +422,7 @@
         </div>
     </header>
 
-    <div class="container animate-fade-in">
+    <div id="public-view" class="container animate-fade-in">
         <div class="hero">
             <h1>Identity meets Intelligence.</h1>
             <p>Unified security scaling across distributed clusters. Manage your credentials and start scanning.</p>
@@ -236,42 +430,185 @@
 
         <div id="logged-out-view" class="card">
             <h2 style="margin-bottom: 2rem;">Welcome Back</h2>
-            <div id="init-error" class="hidden" style="color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.9rem; border: 1px solid rgba(239, 68, 68, 0.2);"></div>
-            <button id="login-btn" class="btn" onclick="login()" disabled style="opacity: 0.5; cursor: not-allowed;">Loading Security Layer...</button>
+            <div id="init-error" class="hidden"
+                style="color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.9rem; border: 1px solid rgba(239, 68, 68, 0.2);">
+            </div>
+            <button id="login-btn" class="btn" onclick="login()" disabled
+                style="opacity: 0.5; cursor: not-allowed;">Loading Security Layer...</button>
             <p style="margin-top: 2.5rem; font-size: 0.9rem; color: var(--text-dim);">
-                New to CodeInspector? <a href="#" style="color: var(--primary);">Create an account</a>.
+                New to 01 Sandbox? <a href="#" style="color: var(--primary);">Create an account</a>.
             </p>
         </div>
+    </div>
 
-        <div id="logged-in-view" class="card hidden">
-            <h2 style="margin-bottom: 1rem; text-align: left;">Your API Credentials</h2>
-            <p style="text-align: left; color: var(--text-dim); margin-bottom: 2rem;">Use this token as a Bearer token
-                for all API requests targeting the CodeInspector endpoints.</p>
+    <!-- Logged in Dashboard Layout -->
+    <div id="dashboard-view" class="dashboard-layout hidden">
+        <aside class="sidebar">
+            <!-- 
+            <div class="menu-item"><span class="menu-icon">⚡</span> Getting Started</div>
+            <div class="menu-item"><span class="menu-icon">✨</span> AI Agents <span style="background: var(--primary); color: white; font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; margin-left: left;">NEW</span></div>
+            <div class="menu-item"><span class="menu-icon">📈</span> Activity</div>
+            -->
 
-            <div class="token-container">
-                <div class="token-label">
-                    <span>PERSISTENT ACCESS TOKEN</span>
-                    <span id="copy-status" style="color: var(--success); font-weight: 600;"
-                        class="hidden">COPIED!</span>
+            <div class="sidebar-category">Applications & APIs</div>
+            <div class="menu-item" onclick="showApplicationsPage()"><span class="menu-icon">📦</span> Applications</div>
+            <div class="menu-item active" onclick="showAPIPage()"><span class="menu-icon">🔌</span> APIs</div>
+            <!-- <div class="menu-item"><span class="menu-icon">🔑</span> SSO Integrations</div> -->
+
+            <!--
+            <div class="sidebar-category">System Setup</div>
+            <div class="menu-item"><span class="menu-icon">🔐</span> Authentication</div>
+            <div class="menu-item"><span class="menu-icon">🏢</span> Organizations</div>
+            <div class="menu-item"><span class="menu-icon">👥</span> User Management</div>
+            <div class="menu-item"><span class="menu-icon">🛡️</span> Security</div>
+            <div class="menu-item"><span class="menu-icon">📊</span> Monitoring</div>
+            -->
+        </aside>
+
+        <main class="main-content">
+            <div id="api-page" class="card" style="text-align: left; max-width: 1000px; margin: 0 auto;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
+                    <div>
+                        <h2 style="margin-bottom: 0.5rem; font-size: 1.8rem;">API Management</h2>
+                        <p style="color: var(--text-dim);">Manage your service-specific access tokens and track usage.
+                        </p>
+                    </div>
+                    <button class="btn" style="padding: 0.75rem 1.5rem;" onclick="showCreateModal()">+ Create API
+                        Key</button>
                 </div>
-                <div id="token-display" class="token-box" onclick="copyToken()">
-                    Generating token...
+
+                <div class="keys-grid" id="keys-list">
+                    <!-- Keys will be injected here -->
                 </div>
-                <div id="copy-hint" class="copy-hint">Click the box to copy your key to clipboard.</div>
+
+                <div style="margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Quick Integration</h3>
+                    <code
+                        style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; display: block; font-size: 0.85rem; border: 1px solid var(--border); color: #818cf8;">
+                        curl -X GET "https://dipper-shun-glowing.ngrok-free.dev/v1/health" \ <br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;-H "Authorization: Bearer &lt;your-key&gt;"
+                    </code>
+                </div>
             </div>
 
-            <div style="margin-top: 3rem; text-align: left; border-top: 1px solid var(--border); padding-top: 2rem;">
-                <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Quick Integration</h3>
-                <code
-                    style="background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 6px; display: block; font-size: 0.85rem;">
-                    curl -H "Authorization: Bearer <your-key>" https://dipper-shun-glowing.ngrok-free.dev/v1/scan-jobs
-                </code>
+            <div id="placeholder-page" class="hidden" style="text-align: center; margin-top: 5rem;">
+                <div style="font-size: 4rem; opacity: 0.5; margin-bottom: 1rem;">🚧</div>
+                <h2>Module Coming Soon</h2>
+                <p style="color: var(--text-dim); margin-top: 0.5rem;">This section of the dashboard is currently under
+                    development.</p>
+            </div>
+
+            <div id="applications-page" class="hidden card"
+                style="text-align: left; max-width: 1000px; margin: 0 auto;">
+                <div style="margin-bottom: 2rem;">
+                    <h2 style="margin-bottom: 0.5rem; font-size: 1.8rem;">Applications</h2>
+                    <p style="color: var(--text-dim);">Navigate to your configured sandbox backends.</p>
+                </div>
+
+                <div class="keys-grid">
+                    <div class="key-card animate-fade-in hover-scale"
+                        style="cursor: pointer; transition: transform 0.2s;"
+                        onclick="window.open('https://dipper-shun-glowing.ngrok-free.dev/backend/z1sandbox/docs', '_blank')">
+                        <div class="key-info">
+                            <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                                <div
+                                    style="font-size: 2.5rem; background: rgba(99, 102, 241, 0.1); padding: 0.5rem; border-radius: 12px; line-height: 1;">
+                                    ⚡</div>
+                                <div>
+                                    <h4 style="margin:0; font-size: 1.2rem; color: var(--text);">Z1 Sandbox</h4>
+                                    <p
+                                        style="color: var(--text-dim); margin-top: 0.5rem; font-size: 0.9rem; line-height: 1.4;">
+                                        Active remote backend for live code evaluation and execution.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="key-card animate-fade-in hover-scale"
+                        style="cursor: pointer; transition: transform 0.2s;"
+                        onclick="window.open('https://dipper-shun-glowing.ngrok-free.dev/backend/opensandbox/docs', '_blank')">
+                        <div class="key-info">
+                            <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                                <div
+                                    style="font-size: 2.5rem; background: rgba(16, 185, 129, 0.1); padding: 0.5rem; border-radius: 12px; line-height: 1;">
+                                    🌐</div>
+                                <div>
+                                    <h4 style="margin:0; font-size: 1.2rem; color: var(--text);">OpenSandbox</h4>
+                                    <p
+                                        style="color: var(--text-dim); margin-top: 0.5rem; font-size: 0.9rem; line-height: 1.4;">
+                                        Distributed scaling cluster configuration and telemetry.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden" onclick="closeModals()">
+        <!-- Create Key Modal -->
+        <div id="create-modal" class="modal-content hidden" onclick="event.stopPropagation()">
+            <h2 style="margin-bottom: 1.5rem;">Create New API Key</h2>
+            <div class="form-group">
+                <label>Key Name</label>
+                <input type="text" id="key-name" placeholder="e.g. Production Scanner">
+            </div>
+            <div class="form-group">
+                <label>Target Backend</label>
+                <select id="key-backend">
+                    <option value="Z1_SANDBOX">Z1 Sandbox (/backend/z1sandbox/docs)</option>
+                </select>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column;">
+                <label>Time to live</label>
+                <div style="display: flex; gap: 0.5rem; width: 100%;">
+                    <input type="number" id="key-ttl-value" value="1" min="1" style="flex: 1;">
+                    <select id="key-ttl-unit" style="flex: 2; cursor: pointer;"
+                        onchange="document.getElementById('key-ttl-value').disabled = (this.value === 'never');">
+                        <option value="hours">Hours</option>
+                        <option value="days">Days</option>
+                        <option value="months">Months</option>
+                        <option value="years">Years</option>
+                        <option value="never">Never Expire</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                <button class="btn" style="flex: 1; padding: 0.75rem;" onclick="submitCreateKey()">Generate Key</button>
+                <button class="btn"
+                    style="flex: 1; padding: 0.75rem; background: transparent; border: 1px solid var(--border); box-shadow: none;"
+                    onclick="closeModals()">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Reveal Key Modal (One-time) -->
+        <div id="reveal-modal" class="modal-content hidden" onclick="event.stopPropagation()">
+            <div
+                style="background: rgba(16, 185, 129, 0.1); color: var(--success); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; font-size: 0.9rem; border: 1px solid rgba(16, 185, 129, 0.2);">
+                <strong>Success!</strong> Your key has been generated. Copy it now, as you won't be able to see it
+                again.
+            </div>
+            <div class="token-box" id="new-key-display"
+                style="font-size: 0.85rem; padding: 1.5rem; background: #000; color: #fff; border: 1px solid var(--primary); min-height: 60px;">
+                <!-- Token goes here -->
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                <button class="btn" style="flex: 1; padding: 0.75rem;" onclick="copyNewKey()">Copy Key</button>
+                <a href="https://dipper-shun-glowing.ngrok-free.dev/backend/z1sandbox/docs" target="_blank" class="btn"
+                    style="flex: 1; padding: 0.75rem; background: rgba(99, 102, 241, 0.2); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.5); text-decoration: none; text-align: center;">Go
+                    to Sandbox Docs</a>
+                <button class="btn"
+                    style="flex: 1; padding: 0.75rem; background: transparent; border: 1px solid var(--border); box-shadow: none;"
+                    onclick="closeModals()">Done</button>
             </div>
         </div>
     </div>
 
     <footer>
-        &copy; 2026 CodeInspector Security. Built for Enterprise.
+        &copy; 2026 01 Sandbox Security. Built for Enterprise.
     </footer>
 
     <script>
@@ -288,7 +625,7 @@
             try {
                 // Wait for the library to be available in the global scope
                 const clientCreator = window.createAuth0Client || (window.auth0 && window.auth0.createAuth0Client);
-                
+
                 if (!clientCreator) {
                     throw new Error("Auth0 Security SDK failed to load. Please check your internet connection or disable ad-blockers for this domain.");
                 }
@@ -312,7 +649,7 @@
                 }
 
                 updateUI();
-                
+
                 // Enable button once ready
                 const loginBtn = document.getElementById("login-btn");
                 loginBtn.disabled = false;
@@ -325,7 +662,7 @@
                 const errorBox = document.getElementById("init-error");
                 errorBox.classList.remove("hidden");
                 errorBox.innerHTML = `<strong>Initialization Failed:</strong> ${err.message}<br><br>Ensure you are accessing this page via <u>http://localhost</u> or <u>ngrok</u>. Secure auth cannot run from a direct <code>file://</code> path.`;
-                
+
                 const loginBtn = document.getElementById("login-btn");
                 loginBtn.textContent = "Security Error";
             }
@@ -336,37 +673,149 @@
 
             if (isAuthenticated) {
                 const user = await auth0Client.getUser();
-                const token = await auth0Client.getTokenSilently({
-                    authorizationParams: {
-                        audience: config.audience
-                    }
-                });
-                
-                if (token.split('.').length < 3) {
-                    console.error("CRITICAL: Auth0 returned an OPAQUE token. Ensure the API 'https://code-inspector-api' is registered in your Auth0 dashboard, otherwise backend validation will fail!");
-                }
+                const token = await auth0Client.getTokenSilently();
 
-                document.getElementById("logged-out-view").classList.add("hidden");
-                document.getElementById("logged-in-view").classList.remove("hidden");
+                document.getElementById("public-view").classList.add("hidden");
+                document.getElementById("dashboard-view").classList.remove("hidden");
                 document.getElementById("user-nav").classList.remove("hidden");
 
                 document.getElementById("user-avatar").src = user.picture;
-                document.getElementById("token-display").textContent = token;
-                document.getElementById("copy-hint").classList.add("visible");
+
+                // Fetch existing keys
+                fetchAPIKeys();
 
                 // Set secure cookie for auto-authenticating with documentation
-                // We use the standard raw token; AgentGateway will parse this directly
                 document.cookie = `inspector_auth=${token}; SameSite=Strict; Path=/`;
 
-                // Auto-redirect to docs if we just logged in
-                if (window.shouldRedirectToDocs) {
-                    setTimeout(() => { window.location.href = "/docs"; }, 100);
-                }
+                setupSidebar();
             } else {
-                document.getElementById("logged-out-view").classList.remove("hidden");
-                document.getElementById("logged-in-view").classList.add("hidden");
+                document.getElementById("public-view").classList.remove("hidden");
+                document.getElementById("dashboard-view").classList.add("hidden");
                 document.getElementById("user-nav").classList.add("hidden");
             }
+        };
+
+        const fetchAPIKeys = async () => {
+            try {
+                const token = await auth0Client.getTokenSilently();
+                const response = await fetch("/v1/api-keys", {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                renderKeys(data.keys);
+            } catch (err) {
+                console.error("Failed to fetch keys:", err);
+            }
+        };
+
+        const renderKeys = (keys) => {
+            const list = document.getElementById("keys-list");
+            const activeKeys = keys ? keys.filter(k => !k.is_revoked) : [];
+
+            if (activeKeys.length === 0) {
+                list.innerHTML = `
+                    <div style="padding: 4rem; color: var(--text-dim); text-align: center;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔑</div>
+                        <p>No active API keys found. Create one to get started.</p>
+                    </div>`;
+                return;
+            }
+
+            list.innerHTML = activeKeys.map(key => `
+                <div class="key-card animate-fade-in">
+                    <div class="key-info">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <h4 style="margin:0">${key.name}</h4>
+                            <span class="badge badge-${key.backend}">${key.backend}</span>
+                        </div>
+                        <div class="key-meta">
+                            <span>ID: ${key.prefix}</span>
+                            <span>Used: ${key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}</span>
+                        </div>
+                    </div>
+                    <button class="btn-delete" onclick="deleteKey('${key.id}')">Revoke</button>
+                </div>
+            `).join('');
+        };
+
+        const showCreateModal = () => {
+            document.getElementById("modal-overlay").classList.remove("hidden");
+            document.getElementById("create-modal").classList.remove("hidden");
+            document.getElementById("reveal-modal").classList.add("hidden");
+        };
+
+        const closeModals = () => {
+            document.getElementById("modal-overlay").classList.add("hidden");
+            document.getElementById("create-modal").classList.add("hidden");
+            document.getElementById("reveal-modal").classList.add("hidden");
+        };
+
+        const submitCreateKey = async () => {
+            const name = document.getElementById("key-name").value;
+            const backend = document.getElementById("key-backend").value;
+            const ttlValue = parseInt(document.getElementById("key-ttl-value").value) || 1;
+            const ttlUnit = document.getElementById("key-ttl-unit").value;
+            let finalTtlHours = 1;
+
+            if (ttlUnit === "hours") finalTtlHours = ttlValue;
+            else if (ttlUnit === "days") finalTtlHours = ttlValue * 24;
+            else if (ttlUnit === "months") finalTtlHours = ttlValue * 24 * 30;
+            else if (ttlUnit === "years") finalTtlHours = ttlValue * 24 * 365;
+            else if (ttlUnit === "never") finalTtlHours = -1;
+
+            try {
+                const token = await auth0Client.getTokenSilently();
+                const response = await fetch("/v1/api-keys", {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, backend, ttl_hours: finalTtlHours })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || "Failed to generate key");
+                }
+
+                if (!data.api_key) {
+                    throw new Error("Server did not return a valid API key.");
+                }
+
+                // Show reveal modal
+                document.getElementById("create-modal").classList.add("hidden");
+                document.getElementById("reveal-modal").classList.remove("hidden");
+                document.getElementById("new-key-display").textContent = data.api_key;
+
+                // Refresh list
+                fetchAPIKeys();
+            } catch (err) {
+                alert("Creation Failed: " + err.message);
+                console.error(err);
+            }
+        };
+
+        const deleteKey = async (jti) => {
+            if (!confirm("Are you sure you want to revoke this key? This action is instant and permanent.")) return;
+
+            try {
+                const token = await auth0Client.getTokenSilently();
+                await fetch(`/v1/api-keys/${jti}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                fetchAPIKeys();
+            } catch (err) {
+                alert("Failed to revoke key: " + err.message);
+            }
+        };
+
+        const copyNewKey = () => {
+            const token = document.getElementById("new-key-display").textContent;
+            navigator.clipboard.writeText(token);
+            alert("Key copied to clipboard!");
         };
 
         const login = async () => {
@@ -378,7 +827,7 @@
             // Clear the auth cookies
             document.cookie = "inspector_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
             document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-            
+
             auth0Client.logout({
                 logoutParams: {
                     returnTo: window.location.origin + window.location.pathname
@@ -393,6 +842,39 @@
             const status = document.getElementById("copy-status");
             status.classList.remove("hidden");
             setTimeout(() => status.classList.add("hidden"), 2000);
+        };
+
+        const setupSidebar = () => {
+            const items = document.querySelectorAll('.menu-item');
+            items.forEach(item => {
+                item.addEventListener('click', () => {
+                    items.forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+
+                    if (item.textContent.includes('APIs')) {
+                        showAPIPage();
+                    } else if (item.textContent.includes('Applications')) {
+                        showApplicationsPage();
+                    } else {
+                        document.getElementById('api-page').classList.add('hidden');
+                        document.getElementById('applications-page').classList.add('hidden');
+                        document.getElementById('placeholder-page').classList.remove('hidden');
+                    }
+                });
+            });
+        };
+
+        const showAPIPage = () => {
+            document.getElementById('api-page').classList.remove('hidden');
+            document.getElementById('applications-page').classList.add('hidden');
+            document.getElementById('placeholder-page').classList.add('hidden');
+            fetchAPIKeys();
+        };
+
+        const showApplicationsPage = () => {
+            document.getElementById('applications-page').classList.remove('hidden');
+            document.getElementById('api-page').classList.add('hidden');
+            document.getElementById('placeholder-page').classList.add('hidden');
         };
 
         window.onload = initAuth0;
