@@ -104,6 +104,7 @@ class AppState:
                     name TEXT,
                     backend TEXT,
                     user_id TEXT,
+                    user_email TEXT,
                     created_at TEXT,
                     expires_at TEXT,
                     last_used_at TEXT,
@@ -118,6 +119,7 @@ class AppState:
                     name TEXT,
                     backend TEXT,
                     user_id TEXT,
+                    user_email TEXT,
                     created_at TEXT,
                     expires_at TEXT,
                     last_used_at TEXT,
@@ -126,6 +128,15 @@ class AppState:
                 )
             """)
         
+        # Schema Guard: Ensure user_email exists (Migration)
+        try:
+            cursor.execute("ALTER TABLE api_keys ADD COLUMN user_email TEXT" if self.use_postgres else "ALTER TABLE api_keys ADD COLUMN user_email TEXT")
+            conn.commit()
+            print("[startup] Database migration: Added user_email column to api_keys")
+        except Exception:
+            conn.rollback()
+            pass
+
         # Sync Active Registry to Redis for line-rate validation
         if self.use_redis:
             cursor.execute("SELECT id FROM api_keys WHERE is_revoked = 0")
@@ -219,7 +230,11 @@ async def validate_token(request: Request):
     Decodes and validates the RS256 JWT produced by the Edge Gateway's 
     cookie transformation.
     """
-    # 1. Extraction: Priorities = Authorization Header -> Execution Cookie -> Auth0 Cookie
+    # 1. Path-Aware Enforcement: Decide if we allow Cookie Fallbacks
+    path = request.url.path
+    # Execution routes MUST use a header. No 'Ghost Authorization' via cookies allowed for execution.
+    is_execution_route = path.startswith("/v1/run") or ("/backend/z1sandbox/" in path and "/docs" not in path and "/openapi.json" not in path)
+    
     auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
     raw_token = None
     source = "header"
@@ -227,9 +242,8 @@ async def validate_token(request: Request):
     if auth_header:
         # Accept both "Bearer <token>" and raw "<token>"
         raw_token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
-    else:
-        # Fallback 1: Dedicated Execution Token (Developer API Keys)
-        # Fallback 2: Management Session (Auth0)
+    elif not is_execution_route:
+        # ALLOW Cookie Fallback ONLY for Management/Docs/UI routes
         exec_cookie = request.cookies.get("execution_token")
         auth0_cookie = request.cookies.get("inspector_auth")
         
@@ -241,8 +255,9 @@ async def validate_token(request: Request):
             source = "management_cookie"
 
     if not raw_token:
-        print(f"[DEBUG SECURITY] ERROR: No credentials found in Headers or Cookies.")
-        raise HTTPException(status_code=401, detail="Authentication required (API Key or Session missing)")
+        error_msg = "Execution required an explicit API Key in the Authorization header. Please use the 'Authorize' padlock." if is_execution_route else "Authentication required (API Key or Session missing)"
+        print(f"[DEBUG SECURITY] REJECTION: No credentials found for {path} (Is Execution: {is_execution_route})")
+        raise HTTPException(status_code=401, detail=error_msg)
     
     token = raw_token
     conf = jwt_config()
@@ -360,21 +375,26 @@ async def validate_token(request: Request):
         # Update last_used_at in background
         asyncio.create_task(update_last_used(jti))
 
-        # 6. Session Alignment Check (Anti-CSRF)
-        # Ensure that if both a header and a cookie are present, they are consistent
+        # 6. Session Identity Lockdown
+        # Security Policy: If a browser session exists, the API Key MUST belong to that user.
         auth_header_raw = request.headers.get("authorization") or request.headers.get("Authorization")
-        cookie_token = request.cookies.get("execution_token") or request.cookies.get("inspector_auth")
+        auth0_cookie = request.cookies.get("inspector_auth")
         
-        if auth_header_raw and cookie_token:
+        if auth_header_raw and auth0_cookie:
             apikey_sub = payload.get("sub")
             try:
-                cookie_payload = jwt.decode(cookie_token, options={"verify_signature": False})
+                # We decode the cookie without signature verification just to get the identity (Gateway already verified it)
+                cookie_payload = jwt.decode(auth0_cookie, options={"verify_signature": False})
                 cookie_sub = cookie_payload.get("sub")
-                if cookie_sub and cookie_sub != apikey_sub:
-                    # Special case: allow if the session is mapped via Identity Bridge
-                    if issuer != conf["issuer"]: pass 
-                    else: raise HTTPException(status_code=403, detail="Session mismatch detectd.")
-            except Exception:
+                
+                if cookie_sub and apikey_sub and cookie_sub != apikey_sub:
+                    print(f"[SECURITY ALERT] IDENTITY MISMATCH: User {cookie_sub} attempted to use API Key belonging to User {apikey_sub}")
+                    raise HTTPException(
+                        status_code=403, 
+                        detail="Identity Lockdown: You cannot use an API key that belongs to another user."
+                    )
+            except Exception as e:
+                if isinstance(e, HTTPException): raise e
                 pass
 
         return payload
@@ -817,6 +837,8 @@ async def list_user_api_keys(payload: dict = Depends(validate_token)):
             id=row["id"],
             name=row["name"],
             backend=row["backend"],
+            user_id=row["user_id"],
+            user_email=row.get("user_email"),
             created_at=row["created_at"],
             expires_at=row["expires_at"],
             last_used_at=row["last_used_at"],
@@ -856,17 +878,16 @@ async def create_api_key(req: APIKeyCreateRequest, payload: dict = Depends(valid
     
     token = jwt.encode(token_payload, conf["private_key"], algorithm=conf["algorithm"], headers={"kid": "code-inspector-key-01"})
     
-    # Persist to Central Database
+    # Persist metadata with User identity
+    user_email = payload.get("email") # Auth0 claims usually include email
     conn = state.get_db_conn()
     cursor = conn.cursor()
     query = """
-        INSERT INTO api_keys (id, name, backend, user_id, created_at, expires_at, prefix)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """ if state.use_postgres else """
-        INSERT INTO api_keys (id, name, backend, user_id, created_at, expires_at, prefix)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """
-    cursor.execute(query, (jti, req.name, req.backend.value, user_id, now.isoformat(), expires_at.isoformat(), f"ci_{jti[:8]}..."))
+        INSERT INTO api_keys (id, name, backend, user_id, user_email, created_at, expires_at, prefix)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """ if state.use_postgres else "INSERT INTO api_keys (id, name, backend, user_id, user_email, created_at, expires_at, prefix) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    
+    cursor.execute(query, (jti, req.name, req.backend.value, user_id, user_email, now.isoformat(), expires_at.isoformat(), f"ci_{jti[:8]}"))
     conn.commit()
     conn.close()
     

@@ -114,6 +114,8 @@ class APIKeyRecord(BaseModel):
     id: str # JTI
     name: str
     backend: str
+    user_id: str
+    user_email: Optional[str] = None
     created_at: str
     expires_at: str
     last_used_at: Optional[str] = None
