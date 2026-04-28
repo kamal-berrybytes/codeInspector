@@ -250,7 +250,13 @@ const submitCreateKey = async () => {
         });
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "Failed to generate key");
+        if (!response.ok) {
+            let errorMsg = "Failed to generate key";
+            if (data.detail) {
+                errorMsg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+            }
+            throw new Error(errorMsg);
+        }
 
         await fetchAPIKeys();
         localStorage.setItem(`bound_key_${data.api_key_id}`, data.api_key);
