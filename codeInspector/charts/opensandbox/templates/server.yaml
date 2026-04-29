@@ -58,7 +58,7 @@ spec:
       containers:
         - name: server
           image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ .Values.server.image.pullPolicy | default "Always" }}
           ports:
             - containerPort: 8080
               protocol: TCP

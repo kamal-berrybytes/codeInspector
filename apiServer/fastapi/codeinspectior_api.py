@@ -128,6 +128,8 @@ class AppState:
                 )
             """)
         
+        conn.commit()
+        
         # Schema Guard: Ensure user_email exists (Migration)
         try:
             cursor.execute("ALTER TABLE api_keys ADD COLUMN user_email TEXT" if self.use_postgres else "ALTER TABLE api_keys ADD COLUMN user_email TEXT")
