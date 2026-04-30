@@ -25,18 +25,18 @@ const HeroSection = () => {
           </h1>
 
           <p className="text-base sm:text-xl text-muted-foreground/90 max-w-2xl mx-auto mt-6 sm:mt-8 leading-relaxed">
-            01 Sandbox runs every line in a hardened gVisor pod, auto-audits for
+            01 Sandbox runs every line in a hardened pod, auto-audits for
             vulnerabilities, secrets, and policy violations — without touching your host kernel.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10 sm:mt-12">
+          {/* <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10 sm:mt-12">
             <a
               href="#architecture"
               className="px-8 py-4 rounded-full border border-border bg-background/50 backdrop-blur-sm text-foreground font-bold text-base hover:bg-muted transition-all hover:scale-[1.02] active:scale-95"
             >
               Explore Architecture
             </a>
-          </div>
+          </div> */}
         </motion.div>
 
         <motion.div

@@ -21,7 +21,7 @@ const Footer = () => {
 
           {/* Copyright Section */}
           <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">
-            © {new Date().getFullYear()} 01 Sandbox. All rights reserved.
+            © {new Date().getFullYear()} 01 Security. All rights reserved.
           </div>
 
           {/* Links Section */}
