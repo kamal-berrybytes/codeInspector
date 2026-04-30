@@ -10,15 +10,16 @@ const XIcon = ({ className }: { className?: string }) => (
 const Contact = () => {
   const contactMethods = [
     { label: "Email", icon: Mail, href: "mailto:info@01security.com", desc: "info@01security.com" },
-    { label: "Follow us", icon: XIcon, href: "https://x.com", desc: "Brand Updates" },
+    // { label: "GitHub", icon: Github, href: "https://github.com/11security", desc: "01 Sandbox" },
+    // { label: "Slack", icon: MessageSquare, href: "https://join.slack.com/t/01securitycommunity/shared_invite/zt-2d1f1997c-~yJz7LNDkU5W2b4B~o~h0A", desc: "01 Security" },
   ];
 
   return (
     <div className="relative min-h-screen text-foreground selection:bg-accent selection:text-white overflow-hidden">
-      {/* Background Decorative Orbs */}
+      {/* Background Decorative Orbs - More Subtle */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent/5 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent/2 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/2 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
       <main className="pt-40 pb-32">
@@ -46,13 +47,13 @@ const Contact = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-lg md:text-xl text-muted-foreground/70 max-w-xl mx-auto leading-relaxed"
+              className="text-lg md:text-xl text-muted-foreground/60 max-w-xl mx-auto leading-relaxed"
             >
               Building the future of secure code execution. <br className="hidden md:block" /> Reach out via our official channels.
             </motion.p>
           </div>
 
-          {/* Clean Card Grid - Centered Content */}
+          {/* Clean Card Grid - Centered Content & Darker Style */}
           <div className="flex flex-wrap justify-center gap-6 md:gap-8 mb-32">
             {contactMethods.map((method, idx) => (
               <motion.a
@@ -61,20 +62,20 @@ const Contact = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.3 + idx * 0.1 }}
-                className="group relative p-10 md:p-12 rounded-[2.5rem] bg-card/40 backdrop-blur-xl border border-border/50 hover:bg-card/60 hover:border-accent/30 transition-all duration-500 overflow-hidden min-w-[280px] sm:min-w-[320px] flex-1 max-w-[400px]"
+                className="group relative p-10 md:p-12 rounded-[2.5rem] bg-card/20 backdrop-blur-2xl border border-border/20 hover:bg-card/40 hover:border-accent/20 transition-all duration-500 overflow-hidden min-w-[280px] sm:min-w-[320px] flex-1 max-w-[400px]"
               >
                 <div className="relative z-10 flex flex-col items-center text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-foreground/5 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-accent group-hover:text-white transition-all duration-500 ring-1 ring-border/50 group-hover:ring-accent/40 shadow-lg shadow-transparent group-hover:shadow-accent/20">
+                  <div className="w-16 h-16 rounded-2xl bg-foreground/5 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-accent group-hover:text-white transition-all duration-500 ring-1 ring-border/20 group-hover:ring-accent/40 shadow-lg shadow-transparent group-hover:shadow-accent/10">
                     <method.icon className="w-7 h-7" />
                   </div>
                   <h3 className="text-2xl font-bold tracking-tight mb-3 group-hover:text-foreground transition-colors">{method.label}</h3>
-                  <p className="text-sm font-medium tracking-wide text-muted-foreground/60 group-hover:text-accent transition-colors">
+                  <p className="text-sm font-medium tracking-wide text-muted-foreground/40 group-hover:text-accent/80 transition-colors">
                     {method.desc}
                   </p>
                 </div>
                 {/* Decorative background glow */}
                 <div className="absolute inset-0 bg-gradient-to-b from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-accent/10 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-accent/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               </motion.a>
             ))}
           </div>
@@ -84,17 +85,17 @@ const Contact = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.8 }}
-            className="flex flex-col items-center pt-24 border-t border-border/40"
+            className="flex flex-col items-center pt-24 border-t border-border/10"
           >
-            <div className="flex items-center gap-2 mb-8 text-muted-foreground/40">
+            <div className="flex items-center gap-2 mb-8 text-muted-foreground/20">
               <Globe className="w-5 h-5" />
               <span className="text-[10px] font-black uppercase tracking-[0.4em]">Headquarters</span>
             </div>
             <div className="text-center group cursor-default">
               <h2 className="text-3xl font-black tracking-tight mb-4 group-hover:text-accent transition-colors">United States</h2>
-              <p className="text-muted-foreground/80 leading-relaxed text-base font-medium">
+              <p className="text-muted-foreground/50 leading-relaxed text-base font-medium max-w-sm">
                 Z1 Security LLC<br />
-                10989 Tower PI,
+                10989 Tower PI, <br className="sm:hidden" />
                 Manassas, Virginia 20109
               </p>
             </div>

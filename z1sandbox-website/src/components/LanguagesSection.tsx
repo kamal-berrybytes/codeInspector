@@ -20,7 +20,7 @@ const languages = [
 
 const LanguagesSection = () => {
   return (
-    <section className="py-20 border-y border-border/50 bg-secondary/30 overflow-hidden">
+    <section className="py-20 border-y border-border/50 overflow-hidden">
       <div className="container mx-auto px-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-12">
           <div className="md:w-1/3">
