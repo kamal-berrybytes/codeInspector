@@ -25,7 +25,7 @@ const Footer = () => {
           </div>
 
           {/* Links Section */}
-          <div className="flex items-center gap-8 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">
             <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
             <a href="/terms" className="hover:text-foreground transition-colors">Terms of Use</a>
             <a href="/contact" className="hover:text-foreground transition-colors">Contact Us</a>

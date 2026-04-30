@@ -18,7 +18,7 @@ const HeroSection = () => {
             <span className="text-xs sm:text-sm font-bold text-foreground/80 tracking-tight">Secure Code Execution, by Design</span>
           </div>
 
-          <h1 className="font-display font-black text-3xl xs:text-4xl sm:text-6xl md:text-7xl lg:text-8xl leading-[1.05] tracking-tight max-w-5xl mx-auto">
+          <h1 className="font-display font-black text-4xl sm:text-6xl md:text-7xl lg:text-8xl leading-[1.05] tracking-tight max-w-5xl mx-auto">
             Execute Untrusted Code In
             <br />
             <span className="text-gradient">Isolated Environments.</span>
@@ -29,14 +29,20 @@ const HeroSection = () => {
             vulnerabilities, secrets, and policy violations — without touching your host kernel.
           </p>
 
-          {/* <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10 sm:mt-12">
-            <a
-              href="#architecture"
-              className="px-8 py-4 rounded-full border border-border bg-background/50 backdrop-blur-sm text-foreground font-bold text-base hover:bg-muted transition-all hover:scale-[1.02] active:scale-95"
+          <div className="flex flex-wrap items-center justify-center gap-4 mt-10 sm:mt-12">
+            <button
+              onClick={() => loginWithRedirect()}
+              className="px-8 sm:px-10 py-4 rounded-full bg-foreground text-background font-bold text-base sm:text-lg hover:opacity-90 transition-all hover:scale-[1.02] active:scale-95 shadow-xl shadow-foreground/10"
             >
-              Explore Architecture
+              Get Started
+            </button>
+            <a
+              href="#pillars"
+              className="px-8 sm:px-10 py-4 rounded-full border border-border bg-background/50 backdrop-blur-sm text-foreground font-bold text-base sm:text-lg hover:bg-muted transition-all hover:scale-[1.02] active:scale-95"
+            >
+              Learn More
             </a>
-          </div> */}
+          </div>
         </motion.div>
 
         <motion.div
