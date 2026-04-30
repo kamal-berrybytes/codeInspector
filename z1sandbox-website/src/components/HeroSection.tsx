@@ -1,6 +1,18 @@
 import { motion } from "framer-motion";
+import { useAuth0 } from "@auth0/auth0-react";
+import { useNavigate } from "react-router-dom";
 
 const HeroSection = () => {
+  const { loginWithRedirect, isAuthenticated } = useAuth0();
+  const navigate = useNavigate();
+
+  const handleCTA = () => {
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    } else {
+      loginWithRedirect();
+    }
+  };
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-32 pb-20">
       {/* Background gradient orb */}
@@ -31,10 +43,10 @@ const HeroSection = () => {
 
           <div className="flex flex-wrap items-center justify-center gap-4 mt-10 sm:mt-12">
             <button
-              onClick={() => loginWithRedirect()}
+              onClick={handleCTA}
               className="px-8 sm:px-10 py-4 rounded-full bg-foreground text-background font-bold text-base sm:text-lg hover:opacity-90 transition-all hover:scale-[1.02] active:scale-95 shadow-xl shadow-foreground/10"
             >
-              Get Started
+              {isAuthenticated ? "Go to Dashboard" : "Get Started"}
             </button>
             <a
               href="#pillars"

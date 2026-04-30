@@ -239,6 +239,7 @@ opensandbox:
         memory: 512Mi
   server:
     replicaCount: 1
+    sandboxImage: "kamalberrybytes/codeinterpreter:1.0.0"
     image:
       repository: kamalberrybytes/opensandbox-server
       tag: 1.0.0
