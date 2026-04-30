@@ -87,8 +87,8 @@ const Dashboard = () => {
             id: "Z1_SANDBOX",
             name: "Z1 Sandbox",
             description: "Active remote backend for live code evaluation and execution workloads.",
-            baseUrl: "https://dipper-shun-glowing.ngrok-free.dev/backend/z1sandbox",
-            documentationUrl: "https://dipper-shun-glowing.ngrok-free.dev/backend/z1sandbox/docs",
+            baseUrl: "https://shininess-enroll-going.ngrok-free.dev/backend/z1sandbox",
+            documentationUrl: "https://shininess-enroll-going.ngrok-free.dev/backend/z1sandbox/docs",
             icon: "terminal",
             color: "indigo"
           }
