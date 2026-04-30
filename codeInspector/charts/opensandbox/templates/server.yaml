@@ -162,7 +162,7 @@ data:
             - operator: "Exists"
           containers:
           - name: main
-            image: codeinterpreter:3.1.0
+            image: kamalberrybytes/codeinterpreter:1.0.0
             command:
             - tail
             - -f
