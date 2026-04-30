@@ -165,6 +165,7 @@ data:
           containers:
           - name: main
             image: {{ .Values.server.sandboxImage | quote }}
+            imagePullPolicy: IfNotPresent
             command:
             - tail
             - -f
