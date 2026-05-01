@@ -10,11 +10,8 @@ RUN npm install
 COPY . .
 
 # ── Build-time Vite environment variables ─────────────────────────────────
-ARG VITE_RECAPTCHA_SITE_KEY
-ENV VITE_RECAPTCHA_SITE_KEY=$VITE_RECAPTCHA_SITE_KEY
-
-ARG VITE_GOOGLE_CHAT_WEBHOOK_URL
-ENV VITE_GOOGLE_CHAT_WEBHOOK_URL=$VITE_GOOGLE_CHAT_WEBHOOK_URL
+# These variables are baked into the JS bundle at build time.
+# NOTE: reCAPTCHA and Webhooks are now injected at RUNTIME via entrypoint.sh.
 
 ARG VITE_AUTH0_DOMAIN
 ENV VITE_AUTH0_DOMAIN=$VITE_AUTH0_DOMAIN
@@ -38,12 +35,19 @@ RUN npm install -g serve
 # Copy built assets from build stage
 COPY --from=build /app/dist ./dist
 
+# Copy the entrypoint script and make sure it's executable
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+USER root
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Run as non-root user for security best practices in K8s
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN chown -R appuser:appgroup /app/dist
 USER appuser
 
 EXPOSE 3000
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 # -s flag enables SPA mode (rewrites all routes to index.html)
 CMD ["serve", "-s", "dist", "-l", "3000"]
 

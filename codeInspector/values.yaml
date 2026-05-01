@@ -156,6 +156,10 @@ z1sandbox-website:
     audience: "https://code-inspector-api"
   # In-cluster ClusterIP service name of the FastAPI backend
   apiServiceName: "sandbox-api-service"
+
+  # Runtime Environment Variables (Injected at container startup)
+  recaptchaSiteKey: "6LeKiswsAAAAAMF_8fxlr1z7VCRQ0zr-oFfncfd0"
+  googleChatWebhookUrl: "https://chat.googleapis.com/v1/spaces/AAQAQC-SfqE/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=9HUfBxrsiwrTWAyTkwc6qWZ809reZvFb6tGzkJi21uQ"
   
   # Dashboard Applications Config
   # Adding items here will automatically create new cards in the dashboard.
