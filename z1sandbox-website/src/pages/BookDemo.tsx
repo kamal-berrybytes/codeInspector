@@ -33,7 +33,7 @@ const BookDemo = () => {
 
     try {
       // Connecting to Google Chat Space Webhook
-      const webhookUrl = (window as any)._env_?.VITE_GOOGLE_CHAT_WEBHOOK_URL || import.meta.env.VITE_GOOGLE_CHAT_WEBHOOK_URL;
+      const webhookUrl = import.meta.env.VITE_GOOGLE_CHAT_WEBHOOK_URL;
       if (!webhookUrl) {
         throw new Error("Webhook URL is not configured");
       }
@@ -217,11 +217,7 @@ const BookDemo = () => {
                 <div className="flex justify-center py-2">
                   <ReCAPTCHA
                     ref={recaptchaRef}
-                    sitekey={
-                      (window as any)._env_?.VITE_RECAPTCHA_SITE_KEY || 
-                      import.meta.env.VITE_RECAPTCHA_SITE_KEY || 
-                      "YOUR_SITE_KEY_MISSING"
-                    }
+                    sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || "YOUR_SITE_KEY_MISSING"}
                     theme="dark"
                   />
                 </div>
